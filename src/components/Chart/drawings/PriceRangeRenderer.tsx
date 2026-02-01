@@ -10,6 +10,7 @@ interface PriceRangeRendererProps {
     yScale: d3.ScaleLinear<number, number>;
     isSelected: boolean;
     onSelect: (id: number) => void;
+    onDragStart: (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => void;
     baseTime: number;
     step: number;
 }
@@ -20,6 +21,7 @@ export const PriceRangeRenderer: React.FC<PriceRangeRendererProps> = ({
     yScale,
     isSelected,
     onSelect,
+    onDragStart,
     baseTime,
     step
 }) => {
@@ -39,7 +41,18 @@ export const PriceRangeRenderer: React.FC<PriceRangeRendererProps> = ({
     const midY = (y1 + y2) / 2;
 
     return (
-        <g onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }} className="cursor-pointer">
+        <g
+            onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }}
+            onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!drawing.locked) {
+                    onSelect(drawing.id);
+                    onDragStart(drawing.id, 'whole', undefined, e);
+                }
+            }}
+            className={drawing.locked ? "cursor-default" : (isSelected ? "cursor-move" : "cursor-pointer")}
+        >
             <rect
                 x={Math.min(x1, x2)}
                 y={Math.min(y1, y2)}
@@ -56,6 +69,13 @@ export const PriceRangeRenderer: React.FC<PriceRangeRendererProps> = ({
                 <text textAnchor="middle" y={-2} fill="white" fontSize="10px" fontWeight="bold">{`${pDiff.toFixed(2)}`}</text>
                 <text textAnchor="middle" y={8} fill="white" fontSize="9px">{`${pPercent.toFixed(2)}%`}</text>
             </g>
+
+            {isSelected && !drawing.locked && (
+                <>
+                    <circle cx={x1} cy={y1} r={5} fill="white" stroke="#2962ff" strokeWidth={2} onMouseDown={(e) => { e.stopPropagation(); onDragStart(drawing.id, 'point', 1, e); }} className="cursor-crosshair" />
+                    <circle cx={x2} cy={y2} r={5} fill="white" stroke="#2962ff" strokeWidth={2} onMouseDown={(e) => { e.stopPropagation(); onDragStart(drawing.id, 'point', 2, e); }} className="cursor-crosshair" />
+                </>
+            )}
         </g>
     );
 };

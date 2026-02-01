@@ -12,6 +12,7 @@ interface TrendlineRendererProps {
     chartHeight: number;
     isSelected: boolean;
     onSelect: (id: number) => void;
+    onDragStart: (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => void;
     theme: string;
     textColor: string;
     baseTime: number;
@@ -25,6 +26,7 @@ export const TrendlineRenderer: React.FC<TrendlineRendererProps> = ({
     chartWidth,
     isSelected,
     onSelect,
+    onDragStart,
     theme,
     baseTime,
     step
@@ -63,7 +65,18 @@ export const TrendlineRenderer: React.FC<TrendlineRendererProps> = ({
     const opacity = drawing.locked ? 0.4 : drawing.opacity / 100;
 
     return (
-        <g onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }} className="cursor-pointer">
+        <g
+            onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }}
+            onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!drawing.locked) {
+                    onSelect(drawing.id);
+                    onDragStart(drawing.id, 'whole', undefined, e);
+                }
+            }}
+            className={drawing.locked ? "cursor-default" : (isSelected ? "cursor-move" : "cursor-pointer")}
+        >
             {/* Main Line */}
             <line
                 x1={x1}
@@ -97,6 +110,12 @@ export const TrendlineRenderer: React.FC<TrendlineRendererProps> = ({
                         fill="white"
                         stroke="#2962ff"
                         strokeWidth={2}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onDragStart(drawing.id, 'point', 1, e);
+                        }}
+                        className="cursor-crosshair"
                     />
                     <circle
                         cx={getX(drawing.t2)}
@@ -105,6 +124,12 @@ export const TrendlineRenderer: React.FC<TrendlineRendererProps> = ({
                         fill="white"
                         stroke="#2962ff"
                         strokeWidth={2}
+                        onMouseDown={(e) => {
+                            e.stopPropagation();
+                            e.preventDefault();
+                            onDragStart(drawing.id, 'point', 2, e);
+                        }}
+                        className="cursor-crosshair"
                     />
                 </>
             )}

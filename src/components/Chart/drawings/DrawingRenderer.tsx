@@ -17,6 +17,7 @@ interface DrawingRendererProps {
     chartHeight: number;
     isSelected: boolean;
     onSelect: (id: number) => void;
+    onDragStart: (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => void;
     theme: string;
     textColor: string;
     baseTime: number;

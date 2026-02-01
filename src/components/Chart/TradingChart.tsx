@@ -70,6 +70,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const [currentXScale, setCurrentXScale] = useState<d3.ScaleLinear<number, number> | null>(null);
     const [yScale, setYScale] = useState<d3.ScaleLinear<number, number> | null>(null);
 
+    const [dragState, setDragState] = useState<{
+        type: 'point' | 'whole',
+        drawingId: number,
+        pointIndex?: 1 | 2,
+        startMouse?: { x: number, y: number },
+        originalDrawing?: Drawing
+    } | null>(null);
+
+    const resizeObserver = useRef<ResizeObserver | null>(null);
+
     const getIntervalStep = () => {
         if (interval === "1m") return 60;
         if (interval === "5m") return 300;
@@ -89,16 +99,32 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         const observeTarget = containerRef.current;
         if (!observeTarget) return;
 
-        const resizeObserver = new ResizeObserver((entries) => {
+        resizeObserver.current = new ResizeObserver((entries) => {
             for (const entry of entries) {
                 const { width, height } = entry.contentRect;
                 setDimensions({ width, height });
             }
         });
 
-        resizeObserver.observe(observeTarget);
-        return () => resizeObserver.unobserve(observeTarget);
+        resizeObserver.current.observe(observeTarget);
+        return () => resizeObserver.current?.disconnect();
     }, []);
+
+    const handleDrawingDragStart = (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => {
+        const drawing = drawings.find(d => d.id === id);
+        if (!drawing) return;
+
+        // Prevent dragging if locked
+        if (drawing.locked) return;
+
+        setDragState({
+            type,
+            drawingId: id,
+            pointIndex,
+            startMouse: e ? { x: e.clientX, y: e.clientY } : undefined,
+            originalDrawing: { ...drawing }
+        });
+    };
 
     useEffect(() => {
         if (!svgRef.current || data.length === 0 || dimensions.width === 0) return;
@@ -182,24 +208,34 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         let currentScaleY = y;
         let isAutoPriced = true;
 
-        const zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 100]).on("zoom", (e) => {
-            if (activeTool !== 'cursor') return;
-            currentScaleX = x.copy().domain([0, data.length].map(d => e.transform.invertX(x(d))));
-            setCurrentXScale(() => currentScaleX);
-            if (isAutoPriced) {
-                const [s, ed] = currentScaleX.domain();
-                const visible = data.filter((_, i) => i >= s && i <= ed);
-                if (visible.length > 0) {
-                    const minP = d3.min(visible, d => d.low)!;
-                    const maxP = d3.max(visible, d => d.high)!;
-                    const pad = (maxP - minP) * 0.15;
-                    currentScaleY.domain([minP - pad, maxP + pad]);
+        const zoom = d3.zoom<SVGSVGElement, unknown>()
+            .scaleExtent([0.1, 100])
+            .filter((event) => {
+                const target = event.target as Element;
+                // Prevent zoom if clicking on interactive drawing elements
+                const isDrawingInteraction = target.closest('.cursor-move') || target.closest('.cursor-crosshair') || target.closest('.cursor-pointer');
+                if (isDrawingInteraction) return false;
+
+                return !event.ctrlKey && !event.button;
+            })
+            .on("zoom", (e) => {
+                if (activeTool !== 'cursor' || dragState) return; // Disable zoom while dragging
+                currentScaleX = x.copy().domain([0, data.length].map(d => e.transform.invertX(x(d))));
+                setCurrentXScale(() => currentScaleX);
+                if (isAutoPriced) {
+                    const [s, ed] = currentScaleX.domain();
+                    const visible = data.filter((_, i) => i >= s && i <= ed);
+                    if (visible.length > 0) {
+                        const minP = d3.min(visible, d => d.low)!;
+                        const maxP = d3.max(visible, d => d.high)!;
+                        const pad = (maxP - minP) * 0.15;
+                        currentScaleY.domain([minP - pad, maxP + pad]);
+                    }
                 }
-            }
-            drawCandles(currentScaleX, currentScaleY);
-            updateAxes(currentScaleX, currentScaleY);
-            updateGrid(currentScaleX, currentScaleY);
-        });
+                drawCandles(currentScaleX, currentScaleY);
+                updateAxes(currentScaleX, currentScaleY);
+                updateGrid(currentScaleX, currentScaleY);
+            });
 
         svg.call(zoom as any);
 
@@ -208,12 +244,70 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         const yL = crosshair.append("line").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
 
         svg.on("mousemove", (e) => {
+            const [mx, my] = d3.pointer(e);
+
+            // Handle Dragging Logic
+            if (dragState) {
+                e.preventDefault();
+                const chartMx = mx - margin.left;
+                const chartMy = my - margin.top;
+
+                // Get inverted coordinates
+                const idx = Math.round(currentScaleX.invert(chartMx));
+                const time = getTimeAtIndex(Math.max(0, Math.min(idx, data.length - 1))).toString();
+                const price = currentScaleY.invert(chartMy);
+
+                setDrawings(prev => prev.map(d => {
+                    if (d.id !== dragState.drawingId) return d;
+
+                    if (dragState.type === 'point' && dragState.pointIndex) {
+                        return {
+                            ...d,
+                            [`t${dragState.pointIndex}`]: time,
+                            [`p${dragState.pointIndex}`]: price
+                        };
+                    } else if (dragState.type === 'whole' && dragState.originalDrawing && dragState.startMouse) {
+                        // Delta movement since drag start
+                        // Note: To make 'whole' dragging smoother, we'd ideally project the delta mouse X/Y to delta P/T.
+                        // But precise whole-shape dragging with snapping time axis is tricky.
+                        // Simplified approach: move centroid or p1 to mouse, maintain relative offset
+
+                        // Better calculation:
+                        // Calculate price delta and index delta
+                        const startIdx = Math.round(currentScaleX.invert(dragState.startMouse.x - margin.left));
+                        const currentIdx = Math.round(currentScaleX.invert(chartMx));
+                        const idxDelta = currentIdx - startIdx;
+
+                        const startPrice = currentScaleY.invert(dragState.startMouse.y - margin.top);
+                        const priceDelta = price - startPrice;
+
+                        const step = getIntervalStep();
+                        const origT1Idx = (parseInt(dragState.originalDrawing.t1) - data[0].time) / step;
+                        const newT1 = getTimeAtIndex(origT1Idx + idxDelta).toString();
+                        const newP1 = dragState.originalDrawing.p1 + priceDelta;
+
+                        // Same for p2 if exists
+                        if (dragState.originalDrawing.t2 && dragState.originalDrawing.p2 !== undefined) {
+                            const origT2Idx = (parseInt(dragState.originalDrawing.t2) - data[0].time) / step;
+                            const newT2 = getTimeAtIndex(origT2Idx + idxDelta).toString();
+                            const newP2 = dragState.originalDrawing.p2 + priceDelta;
+
+                            return { ...d, t1: newT1, p1: newP1, t2: newT2, p2: newP2 };
+                        }
+
+                        return { ...d, t1: newT1, p1: newP1 };
+                    }
+                    return d;
+                }));
+                return;
+            }
+
+            // Normal Mousemove
             if (!chartSettings.appearance.crosshairVisible) {
                 crosshair.style("display", "none");
                 setHoveredCandle(null);
                 return;
             }
-            const [mx, my] = d3.pointer(e);
             const cx = mx - margin.left, cy = my - margin.top;
             if (cx >= 0 && cx <= chartWidth && cy >= 0 && cy <= chartHeight) {
                 crosshair.style("display", null);
@@ -228,7 +322,20 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
+        svg.on("mouseup", () => {
+            setDragState(null);
+        });
+
+        svg.on("mouseleave", () => {
+            // Optional: cancel drag or keep it sticky? usually mouseup handles it.
+            if (dragState) setDragState(null);
+            crosshair.style("display", "none");
+            setHoveredCandle(null);
+        });
+
         svg.on("click", (e) => {
+            if (dragState) return; // Prevent creating new point on drag release
+
             const [mx, my] = d3.pointer(e);
             const cx = mx - margin.left, cy = my - margin.top;
             const idx = Math.round(currentScaleX.invert(cx));
@@ -276,7 +383,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
-    }, [data, dimensions, drawings.length, activeTool, theme, colors, chartSettings]);
+    }, [data, dimensions, drawings.length, activeTool, theme, colors, chartSettings, dragState]); // Added dragState dependency
 
     const updateSelectedDrawing = (updates: Partial<Drawing>) => {
         if (!selectedId) return;
@@ -344,7 +451,21 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         {currentXScale && yScale && (
                             <g transform="translate(10, 10)" clipPath="url(#chart-clip)">
                                 {drawings.map(d => (
-                                    <DrawingRenderer key={d.id} drawing={d} xScale={currentXScale} yScale={yScale} chartWidth={dimensions.width - 70} chartHeight={dimensions.height - 40} isSelected={selectedId === d.id} onSelect={setSelectedId} theme={theme || 'light'} textColor={colors.text} baseTime={data[0].time} step={getIntervalStep()} />
+                                    <DrawingRenderer
+                                        key={d.id}
+                                        drawing={d}
+                                        xScale={currentXScale}
+                                        yScale={yScale}
+                                        chartWidth={dimensions.width - 70}
+                                        chartHeight={dimensions.height - 40}
+                                        isSelected={selectedId === d.id}
+                                        onSelect={setSelectedId}
+                                        onDragStart={handleDrawingDragStart}
+                                        theme={theme || 'light'}
+                                        textColor={colors.text}
+                                        baseTime={data[0].time}
+                                        step={getIntervalStep()}
+                                    />
                                 ))}
                                 {drawingPoints.current && previewPoint && (
                                     <PreviewRenderer type={activeTool} point1={drawingPoints.current} point2={previewPoint} xScale={currentXScale} yScale={yScale} textColor={colors.text} baseTime={data[0].time} step={getIntervalStep()} />
@@ -361,7 +482,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         <Dialog.Portal>
                             <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100]" />
                             <Dialog.Content asChild>
-                                <motion.div drag dragMomentum={false} initial={{ opacity: 0, scale: 0.98, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} className="fixed top-1/2 left-1/2 w-[400px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded-xl shadow-2xl z-[101] outline-none overflow-hidden flex flex-col">
+                                <motion.div
+                                    drag
+                                    dragMomentum={false}
+                                    initial={{ opacity: 0, scale: 0.98, x: "-50%", y: "-50%" }}
+                                    animate={{ opacity: 1, scale: 1 }}
+                                    style={{ x: "-50%", y: "-50%" }}
+                                    className="fixed top-1/2 left-1/2 w-[400px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded-xl shadow-2xl z-[101] outline-none overflow-hidden flex flex-col"
+                                >
                                     <div className="h-11 border-b border-gray-100 dark:border-[#363a45] flex items-center px-4 justify-between bg-gray-50/50 dark:bg-black/10 cursor-grab active:cursor-grabbing shrink-0">
                                         <div className="flex items-center gap-2">
                                             <Settings size={16} className="text-blue-500" />

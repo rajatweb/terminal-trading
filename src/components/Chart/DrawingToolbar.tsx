@@ -35,8 +35,9 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
             drag
             dragMomentum={false}
             initial={{ opacity: 0, scale: 0.95, y: -20, x: "-50%" }}
-            animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
             className="fixed top-16 left-1/2 z-[40] pointer-events-auto"
+            style={{ x: "-50%" }}
         >
             <Toolbar.Root className="flex items-center px-1.5 py-1 gap-0.5 bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
                 {/* Drag Handle */}

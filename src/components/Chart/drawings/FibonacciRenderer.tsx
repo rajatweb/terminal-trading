@@ -12,6 +12,7 @@ interface FibonacciRendererProps {
     yScale: d3.ScaleLinear<number, number>;
     isSelected: boolean;
     onSelect: (id: number) => void;
+    onDragStart: (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => void;
     textColor: string;
     baseTime: number;
     step: number;
@@ -23,6 +24,7 @@ export const FibonacciRenderer: React.FC<FibonacciRendererProps> = ({
     yScale,
     isSelected,
     onSelect,
+    onDragStart,
     textColor,
     baseTime,
     step
@@ -56,7 +58,21 @@ export const FibonacciRenderer: React.FC<FibonacciRendererProps> = ({
     const maxX = settings.extendRight ? 10000 : Math.max(x1, x2); // 10000 is a safe large number for SVG overflow
 
     return (
-        <g onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }} className="cursor-pointer">
+        <g
+            onClick={(e) => { e.stopPropagation(); if (!drawing.locked) onSelect(drawing.id); }}
+            onMouseDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                if (!drawing.locked) {
+                    onSelect(drawing.id);
+                    onDragStart(drawing.id, 'whole', undefined, e);
+                }
+            }}
+            className={drawing.locked ? "cursor-default" : (isSelected ? "cursor-move" : "cursor-pointer")}
+        >
+            {/* Transparent Hitbox for easier selection/dragging */}
+            <rect x={minX} y={Math.min(y1, y2)} width={maxX - minX} height={Math.abs(y2 - y1)} fill="transparent" />
+
             {settings.showBackground && (
                 <rect x={minX} y={Math.min(y1, y2)} width={maxX - minX} height={Math.abs(y2 - y1)} fill={drawing.color} opacity={0.05} />
             )}
