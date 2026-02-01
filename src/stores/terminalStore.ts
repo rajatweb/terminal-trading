@@ -7,12 +7,18 @@ interface TerminalStore extends TerminalState {
     addWatchlist: (group: WatchlistGroup) => void;
     setActiveWatchlist: (id: string) => void;
     updateWatchlistItem: (symbol: string, updates: Partial<WatchlistItem>) => void;
+    addSection: (name: string) => void;
+    addToWatchlist: (item: WatchlistItem) => void;
+    removeFromWatchlist: (index: number) => void;
+    reorderWatchlist: (startIndex: number, endIndex: number) => void;
     addPosition: (position: Position) => void;
     setPositions: (positions: Position[]) => void;
     updateOptionChain: (data: OptionStrike[]) => void;
     openOrderModal: (config: Omit<OrderModalState, 'isOpen'>) => void;
     closeOrderModal: () => void;
     placeOrder: (order: Omit<Order, 'id' | 'status' | 'timestamp'>) => void;
+    closePosition: (symbol: string) => void;
+    exitAllPositions: () => void;
 }
 
 export const useTerminalStore = create<TerminalStore>((set) => ({
@@ -57,8 +63,65 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
     setSymbol: (symbol) => set({ activeSymbol: symbol }),
 
     addWatchlist: (group) => set((state) => ({
-        watchlists: [...state.watchlists, group]
+        watchlists: [...state.watchlists, group],
+        // Optionally switch to new if needed, but let's keep it manual or consistent.
+        // Assuming ZenithTerminal didn't want auto-switch.
     })),
+
+    addSection: (name) => set((state) => ({
+        watchlists: state.watchlists.map(w => w.id === state.activeWatchlistId ? {
+            ...w,
+            items: [...w.items, {
+                symbol: name,
+                price: 0,
+                change: 0,
+                changePercent: 0,
+                exchange: '',
+                isUp: true,
+                type: 'SECTION'
+            }]
+        } : w)
+    })),
+
+    addToWatchlist: (item: WatchlistItem) => set((state) => ({
+        watchlists: state.watchlists.map(w => w.id === state.activeWatchlistId ? {
+            ...w,
+            items: [...w.items, { ...item, type: 'SYMBOL' }]
+        } : w)
+    })),
+
+    removeFromWatchlist: (index) => set((state) => {
+        const watchlistIndex = state.watchlists.findIndex(w => w.id === state.activeWatchlistId);
+        if (watchlistIndex === -1) return state;
+
+        const newWatchlists = [...state.watchlists];
+        const items = [...newWatchlists[watchlistIndex].items];
+        items.splice(index, 1);
+
+        newWatchlists[watchlistIndex] = {
+            ...newWatchlists[watchlistIndex],
+            items
+        };
+
+        return { watchlists: newWatchlists };
+    }),
+
+    reorderWatchlist: (startIndex, endIndex) => set((state) => {
+        const watchlistIndex = state.watchlists.findIndex(w => w.id === state.activeWatchlistId);
+        if (watchlistIndex === -1) return state;
+
+        const newWatchlists = [...state.watchlists];
+        const items = [...newWatchlists[watchlistIndex].items];
+        const [removed] = items.splice(startIndex, 1);
+        items.splice(endIndex, 0, removed);
+
+        newWatchlists[watchlistIndex] = {
+            ...newWatchlists[watchlistIndex],
+            items
+        };
+
+        return { watchlists: newWatchlists };
+    }),
 
     setActiveWatchlist: (id) => set({ activeWatchlistId: id }),
 
@@ -143,4 +206,30 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
             positions: newPositions
         };
     }),
+
+    closePosition: (symbol) => set((state) => {
+        const position = state.positions.find(p => p.symbol === symbol);
+        if (!position) return state;
+
+        // Mock realization: return margin used (simplified)
+        // In real app, we'd calculate PnL and add to balance
+        const marginRelease = position.qty * position.entryPrice;
+
+        return {
+            positions: state.positions.filter(p => p.symbol !== symbol),
+            marginAvailable: state.marginAvailable + marginRelease,
+            marginUsed: state.marginUsed - marginRelease
+        };
+    }),
+
+    exitAllPositions: () => set((state) => {
+        // Release all margin
+        const totalMarginReleased = state.positions.reduce((acc, pos) => acc + (pos.qty * pos.entryPrice), 0);
+
+        return {
+            positions: [],
+            marginAvailable: state.marginAvailable + totalMarginReleased,
+            marginUsed: state.marginUsed - totalMarginReleased
+        };
+    })
 }));

@@ -7,6 +7,7 @@ export interface WatchlistItem {
     exchange: string;
     description?: string;
     isUp: boolean;
+    type?: 'SYMBOL' | 'SECTION';
 }
 
 export interface WatchlistGroup {
