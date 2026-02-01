@@ -1,15 +1,56 @@
 @import "tailwindcss";
 
+/* Light Theme - Clean, Professional, High Contrast */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f8fafc; /* Slate 50 */
+  --foreground: #0f172a; /* Slate 900 */
+  --surface: #ffffff;
+  --surface-elevated: #ffffff;
+  --surface-hover: #e2e8f0; /* Slate 200 - Darker availability */
+  --border: #cbd5e1; /* Slate 300 - Higher contrast border */
+  --border-subtle: #e2e8f0;
+  --border-secondary: #f1f5f9;
+  --text-muted: #64748b; /* Slate 500 */
+  --text-secondary: #334155; /* Slate 700 */
+  --accent: #2563eb; /* Blue 600 */
+  --accent-hover: #1d4ed8; /* Blue 700 */
+  --input-bg: #ffffff;
+  --input-border: #cbd5e1;
+  --success: #10b981;
+  --danger: #ef4444;
+  --chart-bg: #ffffff;
+  --chart-grid: #f1f5f9;
+  color-scheme: light;
 }
 
+/* Dark Theme - Premium, Deep, Glassy */
 .dark {
-  --background: #131722;
-  --foreground: #ededed;
+  --background: #09090b; /* Zinc 950 */
+  --foreground: #fafafa; /* Zinc 50 */
+  --surface: #121215; /* Custom dark surface */
+  --surface-elevated: #18181b; /* Zinc 900 */
+  --surface-hover: #27272a; /* Zinc 800 - Clearly visible hover */
+  --border: #27272a; /* Zinc 800 */
+  --border-subtle: #18181b;
+  --border-secondary: #18181b;
+  --text-muted: #a1a1aa; /* Zinc 400 */
+  --text-secondary: #d4d4d8; /* Zinc 300 */
+  --accent: #3b82f6; /* Blue 500 */
+  --accent-hover: #60a5fa; /* Blue 400 */
+  --input-bg: #18181b;
+  --input-border: #27272a;
+  --success: #34d399;
+  --danger: #f87171;
+  --chart-bg: #09090b;
+  --chart-grid: #18181b;
+  color-scheme: dark;
 }
 
+html {
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+html,
 body {
   color: var(--foreground);
   background: var(--background);
@@ -17,36 +58,45 @@ body {
   overflow: hidden;
 }
 
-/* Custom Scrollbar for Dark Theme */
-.dark ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.dark ::-webkit-scrollbar-track {
-  background: #1e222d;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #2a2e39;
-  border-radius: 3px;
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #363a45;
+/* Theme-aware transitions for surfaces and borders */
+@layer utilities {
+  .bg-background { background-color: var(--background); }
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-elevated { background-color: var(--surface-elevated); }
+  .bg-surface-hover { background-color: var(--surface-hover); }
 }
 
-/* Custom Scrollbar for Light Theme */
+.bg-surface,
+.bg-surface-elevated,
+.bg-surface-hover,
+[class*="bg-[var(--surface"] {
+  transition: background-color 0.25s ease;
+}
+
+/* Custom Scrollbar - theme-aware */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
+:root ::-webkit-scrollbar-track {
+  background: var(--border-secondary);
 }
-::-webkit-scrollbar-thumb {
-  background: #ccc;
+:root ::-webkit-scrollbar-thumb {
+  background: #c5ccd6;
   border-radius: 3px;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: #bbb;
+:root ::-webkit-scrollbar-thumb:hover {
+  background: #a8b2bd;
+}
+.dark ::-webkit-scrollbar-track {
+  background: var(--border-secondary);
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 3px;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
 }
 
 /* Animations */
@@ -59,13 +109,14 @@ body {
   animation: fadeIn 0.3s ease-in-out;
 }
 
-/* Glassmorphism utility using standard CSS to avoid Tailwind v4 apply issues */
+/* Glassmorphism utility - theme-aware */
 .glass {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(255, 255, 255, 0.7);
 }
-
+:root .glass {
+  background-color: rgba(255, 255, 255, 0.85);
+}
 .dark .glass {
-  background-color: rgba(30, 34, 45, 0.8);
+  background-color: rgba(30, 34, 45, 0.9);
 }

@@ -20,16 +20,16 @@ export const StyleControl: React.FC<StyleControlProps> = ({ style, onUpdate }) =
     <ToolbarTip text="Line Style">
         <div>
             <DropdownMenu.Root>
-                <DropdownMenu.Trigger className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300 transition-colors flex items-center gap-1 px-2 outline-none border-none bg-transparent">
+                <DropdownMenu.Trigger className="p-1.5 hover:bg-surface-hover rounded text-text-muted hover:text-foreground transition-colors flex items-center gap-1 px-2 outline-none border-none bg-transparent">
                     <div className="flex flex-col gap-[2px] w-6">
                         <LinePreview style={style} />
                     </div>
                 </DropdownMenu.Trigger>
-                <DropdownMenu.Content className="bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-gray-700 rounded-md p-1 shadow-xl z-40 min-w-[100px]">
+                <DropdownMenu.Content className="bg-surface-elevated border border-border rounded-md p-1 shadow-xl z-40 min-w-[100px]">
                     {(['solid', 'dashed', 'dotted'] as LineStyle[]).map(s => (
                         <DropdownMenu.Item
                             key={s}
-                            className="px-3 py-2 text-xs text-gray-600 dark:text-gray-300 hover:bg-[#2962ff] hover:text-white rounded cursor-pointer outline-none flex items-center justify-between"
+                            className="px-3 py-2 text-xs text-text-secondary hover:bg-accent hover:text-white rounded cursor-pointer outline-none flex items-center justify-between"
                             onClick={() => onUpdate({ style: s })}
                         >
                             <span className="capitalize">{s}</span>

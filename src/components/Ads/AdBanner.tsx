@@ -48,18 +48,18 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     if (isDismissed) return null;
 
     const positionStyles = {
-        top: 'w-full border-b border-gray-200 dark:border-[#2a2e39]',
-        bottom: 'w-full border-t border-gray-200 dark:border-[#2a2e39]',
-        sidebar: 'w-full border-b border-gray-200 dark:border-[#2a2e39]'
+        top: 'w-full border-b border-border',
+        bottom: 'w-full border-t border-border',
+        sidebar: 'w-full border-b border-border'
     };
 
     const defaultContent = (
         <div className="flex items-center justify-center gap-3 py-3 px-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20">
             <div className="flex-1 text-center">
-                <p className="text-sm font-semibold text-gray-900 dark:text-white">
+                <p className="text-sm font-semibold text-foreground">
                     📊 Upgrade to Premium • Get Real-Time Data & Advanced Analytics
                 </p>
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                <p className="text-xs text-text-muted mt-0.5">
                     Unlock institutional-grade tools, live market feeds, and AI-powered insights
                 </p>
             </div>
@@ -72,7 +72,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
     return (
         <div className={`relative ${positionStyles[position]} ${className}`}>
             {/* Ad Content */}
-            <div className="relative bg-white dark:bg-[#1e222d]">
+            <div className="relative bg-surface-elevated">
                 {adNetwork === 'adsense' && adSlot ? (
                     // Google AdSense integration
                     <div className="min-h-[90px] flex items-center justify-center">
@@ -94,7 +94,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
                 {dismissible && (
                     <button
                         onClick={() => setIsDismissed(true)}
-                        className="absolute top-2 right-2 p-1 rounded-full bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400 transition-colors"
+                        className="absolute top-2 right-2 p-1 rounded-full bg-surface-hover hover:bg-surface-elevated text-text-muted transition-colors"
                         aria-label="Dismiss ad"
                     >
                         <X size={14} />
@@ -102,7 +102,7 @@ export const AdBanner: React.FC<AdBannerProps> = ({
                 )}
 
                 {/* Ad label (required by most ad networks) */}
-                <div className="absolute top-1 left-2 text-[9px] text-gray-400 dark:text-gray-600 uppercase tracking-wider font-bold">
+                <div className="absolute top-1 left-2 text-[9px] text-text-muted uppercase tracking-wider font-bold">
                     Advertisement
                 </div>
             </div>
@@ -120,15 +120,15 @@ export const SidebarAd: React.FC<{ dismissible?: boolean }> = ({ dismissible = t
 
     return (
         <div className="relative w-full p-3 bg-gradient-to-br from-purple-50 to-pink-50 dark:from-purple-950/20 dark:to-pink-950/20 border border-purple-200 dark:border-purple-900/30 rounded-lg">
-            <div className="text-[9px] text-gray-400 dark:text-gray-600 uppercase tracking-wider font-bold mb-2">
+            <div className="text-[9px] text-text-muted uppercase tracking-wider font-bold mb-2">
                 Sponsored
             </div>
 
             <div className="space-y-2">
-                <h3 className="text-xs font-black text-gray-900 dark:text-white">
+                <h3 className="text-xs font-black text-foreground">
                     🚀 Pro Trading Tools
                 </h3>
-                <p className="text-[10px] text-gray-600 dark:text-gray-400 leading-relaxed">
+                <p className="text-[10px] text-text-muted leading-relaxed">
                     Advanced charting, real-time alerts, and institutional-grade analytics
                 </p>
                 <button className="w-full py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white text-[10px] font-bold rounded transition-all shadow-md">
@@ -139,7 +139,7 @@ export const SidebarAd: React.FC<{ dismissible?: boolean }> = ({ dismissible = t
             {dismissible && (
                 <button
                     onClick={() => setIsDismissed(true)}
-                    className="absolute top-1 right-1 p-0.5 rounded-full bg-white/50 dark:bg-black/20 hover:bg-white dark:hover:bg-black/40 text-gray-500 transition-colors"
+                    className="absolute top-1 right-1 p-0.5 rounded-full bg-surface-hover hover:bg-surface text-text-muted transition-colors"
                 >
                     <X size={12} />
                 </button>

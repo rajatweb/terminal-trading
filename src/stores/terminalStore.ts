@@ -13,6 +13,10 @@ interface TerminalStore extends TerminalState {
     openOrderModal: (config: Omit<OrderModalState, 'isOpen'>) => void;
     closeOrderModal: () => void;
     placeOrder: (order: Omit<Order, 'id' | 'status' | 'timestamp'>) => void;
+    exitPosition: (symbol: string) => void;
+    exitAllPositions: () => void;
+    addWatchlistSection: (watchlistId: string, sectionName: string) => void;
+    reorderWatchlist: (watchlistId: string, newOrder: WatchlistItem[]) => void;
 }
 
 export const useTerminalStore = create<TerminalStore>((set) => ({
@@ -22,25 +26,15 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
         {
             id: 'default',
             name: 'Indices',
-            items: [
-                { symbol: 'NIFTY', price: 21750.40, change: 125.20, changePercent: 0.58, exchange: 'NSE', isUp: true },
-                { symbol: 'BANKNIFTY', price: 45600.15, change: -45.60, changePercent: -0.10, exchange: 'NSE', isUp: false },
-                { symbol: 'FINNIFTY', price: 20400.00, change: 12.00, changePercent: 0.06, exchange: 'NSE', isUp: true },
-            ]
+            items: []
         },
         {
             id: 'stocks',
             name: 'Stocks',
-            items: [
-                { symbol: 'RELIANCE', price: 2950.00, change: 15.40, changePercent: 0.52, exchange: 'NSE', isUp: true },
-                { symbol: 'HDFCBANK', price: 1450.80, change: -12.30, changePercent: -0.84, exchange: 'NSE', isUp: false },
-                { symbol: 'TCS', price: 3800.00, change: 45.00, changePercent: 1.20, exchange: 'NSE', isUp: true },
-            ]
+            items: []
         }
     ],
-    positions: [
-        { symbol: 'RELIANCE', qty: 10, entryPrice: 2900, currentPrice: 2950, pnl: 500, pnlPercent: 1.72, type: 'BUY', status: 'ACTIVE' }
-    ],
+    positions: [],
     optionChain: [],
     orders: [],
     marginAvailable: 145200.00,
@@ -143,4 +137,86 @@ export const useTerminalStore = create<TerminalStore>((set) => ({
             positions: newPositions
         };
     }),
+
+    exitPosition: (symbol) => set((state) => {
+        const position = state.positions.find(p => p.symbol === symbol);
+        if (!position) return state;
+
+        const exitOrder: Order = {
+            id: Math.random().toString(36).substr(2, 9),
+            symbol: position.symbol,
+            type: position.type === 'BUY' ? 'SELL' : 'BUY',
+            instrumentType: 'EQUITY',
+            product: 'MIS',
+            orderType: 'MARKET',
+            qty: position.qty,
+            price: position.currentPrice,
+            status: 'EXECUTED',
+            timestamp: Date.now()
+        };
+
+        const releaseMargin = position.currentPrice * position.qty;
+
+        return {
+            orders: [exitOrder, ...state.orders],
+            positions: state.positions.filter(p => p.symbol !== symbol),
+            marginAvailable: state.marginAvailable + releaseMargin,
+            marginUsed: Math.max(0, state.marginUsed - releaseMargin)
+        };
+    }),
+    exitAllPositions: () => set((state) => {
+        if (state.positions.length === 0) return state;
+
+        const exitOrders: Order[] = state.positions.map(position => ({
+            id: Math.random().toString(36).substr(2, 9),
+            symbol: position.symbol,
+            type: position.type === 'BUY' ? 'SELL' : 'BUY',
+            instrumentType: 'EQUITY',
+            product: 'MIS',
+            orderType: 'MARKET',
+            qty: position.qty,
+            price: position.currentPrice,
+            status: 'EXECUTED',
+            timestamp: Date.now()
+        }));
+
+        let totalReleaseMargin = 0;
+        state.positions.forEach(p => {
+            totalReleaseMargin += p.currentPrice * p.qty;
+        });
+
+        return {
+            orders: [...exitOrders, ...state.orders],
+            positions: [],
+            marginAvailable: state.marginAvailable + totalReleaseMargin,
+            marginUsed: 0
+        };
+    }),
+    addWatchlistSection: (watchlistId, sectionName) => set((state) => ({
+        watchlists: state.watchlists.map(w => {
+            if (w.id !== watchlistId) return w;
+            return {
+                ...w,
+                items: [
+                    ...w.items,
+                    {
+                        id: `section-${Math.random()}`,
+                        type: 'SECTION',
+                        sectionLabel: sectionName,
+                        symbol: '', // Dummy values to satisfy interface
+                        price: 0,
+                        change: 0,
+                        changePercent: 0,
+                        exchange: '',
+                        isUp: false
+                    }
+                ]
+            };
+        })
+    })),
+    reorderWatchlist: (watchlistId, newOrder) => set((state) => ({
+        watchlists: state.watchlists.map(w =>
+            w.id === watchlistId ? { ...w, items: newOrder } : w
+        )
+    }))
 }));

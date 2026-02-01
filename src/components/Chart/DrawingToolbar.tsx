@@ -38,9 +38,9 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
             animate={{ opacity: 1, scale: 1, y: 0, x: "-50%" }}
             className="fixed top-16 left-1/2 z-[40] pointer-events-auto"
         >
-            <Toolbar.Root className="flex items-center px-1.5 py-1 gap-0.5 bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.2)]">
+            <Toolbar.Root className="flex items-center px-1.5 py-1 gap-0.5 bg-surface-elevated rounded-xl shadow-xl">
                 {/* Drag Handle */}
-                <div className="px-1.5 py-2 text-gray-300 dark:text-gray-600 cursor-grab active:cursor-grabbing hover:text-gray-400 dark:hover:text-gray-400 transition-colors">
+                <div className="px-1.5 py-2 text-text-muted cursor-grab active:cursor-grabbing hover:text-text-secondary transition-colors">
                     <GripHorizontal size={14} />
                 </div>
 
@@ -52,7 +52,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                 )}
 
                 {(config.showColor || config.showWidth || config.showStyle) && (
-                    <div className="w-[1px] h-4 bg-gray-100 dark:bg-[#363a45] mx-1" />
+                    <div className="w-px h-4 bg-surface-hover mx-1" />
                 )}
 
                 {config.showColor && (
@@ -78,7 +78,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                 )}
 
                 {(config.showExtend || config.showStats) && (
-                    <div className="w-[1px] h-4 bg-gray-100 dark:bg-[#363a45] mx-1" />
+                    <div className="w-px h-4 bg-surface-hover mx-1" />
                 )}
 
                 {config.showExtend && (
@@ -96,7 +96,7 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                     />
                 )}
 
-                <div className="w-[1px] h-4 bg-gray-100 dark:bg-[#363a45] mx-1" />
+                <div className="w-px h-4 bg-surface-hover mx-1" />
 
                 <ActionControls
                     showSettings={!!config.showSettings}
@@ -104,11 +104,11 @@ const DrawingToolbar: React.FC<DrawingToolbarProps> = ({
                     onOpenSettings={onOpenSettings}
                 />
 
-                <div className="w-[1px] h-4 bg-gray-100 dark:bg-[#363a45] mx-1" />
+                <div className="w-px h-4 bg-surface-hover mx-1" />
 
                 <button
                     onClick={onDelete}
-                    className="p-1.5 text-gray-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 rounded-lg transition-all"
+                    className="p-1.5 text-text-muted hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-all"
                 >
                     <X size={16} />
                 </button>

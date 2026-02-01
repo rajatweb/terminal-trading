@@ -1,5 +1,8 @@
 
 export interface WatchlistItem {
+    id?: string; // Unique ID for keying/dnd
+    type?: 'SCRIPT' | 'SECTION';
+    sectionLabel?: string;
     symbol: string;
     price: number;
     change: number;

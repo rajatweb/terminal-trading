@@ -42,11 +42,16 @@ import {
 
 import { WatchlistManager } from "../Terminal/Watchlist/WatchlistManager";
 import { OptionChain } from "../Terminal/OptionChain/OptionChain";
-import { PositionsPanel } from "../Terminal/Dashboard/PositionsTable";
-import { OrderModal } from "../Terminal/OrderModal";
+import { PositionsPanel as PositionsTable } from "../Terminal/Dashboard/PositionsTable";
+import { PositionsPanel } from "../Terminal/Positions/PositionsPanel";
+
 import { useTerminalStore } from "@/stores/terminalStore";
 import { AdBanner, SidebarAd } from "../Ads/AdBanner";
 import { WatchlistItem as StoreWatchlistItem, Position, OptionStrike } from "@/types/terminal";
+import { Walkthrough } from "../Onboarding/Walkthrough";
+import { ThemeToggle } from "../Theme/ThemeToggle";
+
+import { ConfirmationModal } from "../Modals/ConfirmationModal";
 
 export interface WatchlistItem {
     symbol: string;
@@ -86,15 +91,19 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
     const [activeTool, setActiveTool] = useState<string>("cursor");
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
-    const { activeSymbol, setSymbol, watchlists, addWatchlist, setPositions, updateOptionChain } = useTerminalStore();
+    const { activeSymbol, setSymbol, watchlists, addWatchlist, setPositions, updateOptionChain, orders, exitAllPositions } = useTerminalStore();
 
     // Layout State
     const [showWatchlist, setShowWatchlist] = useState(true);
     const [showOptionChain, setShowOptionChain] = useState(false);
     const [showPositions, setShowPositions] = useState(false);
 
+    // Modal State
+
+    const [showExitAllConfirm, setShowExitAllConfirm] = useState(false);
+
     useEffect(() => {
-        setMounted(true);
+        // setMounted(true);
     }, []);
 
     useEffect(() => {
@@ -126,24 +135,24 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
         if (onSymbolChange) onSymbolChange(activeSymbol);
     }, [activeSymbol, onSymbolChange]);
 
-    if (!mounted) return null;
+    // if (!mounted) return null;
 
     return (
         <Tooltip.Provider delayDuration={200}>
-            <div className="flex flex-col h-screen bg-[#f1f3f6] dark:bg-[#131722] text-gray-900 dark:text-[#d1d4dc] font-sans select-none overflow-hidden transition-colors duration-300">
+            <div className="flex flex-col h-screen bg-background text-foreground font-sans select-none overflow-hidden transition-colors duration-theme">
                 {/* Refined Top Navigation Bar */}
-                <header className="h-12 border-b border-gray-200 dark:border-[#2a2e39] flex items-center justify-between bg-white dark:bg-[#131722] z-40 px-3 shrink-0">
-                    <div className="flex items-center h-full divide-x divide-gray-100 dark:divide-[#2a2e39]">
+                <header className="h-12 flex items-center justify-between bg-surface z-40 px-3 shrink-0 transition-colors duration-theme shadow-sm">
+                    <div className="flex items-center h-full gap-1">
                         {/* Logo & Symbol Selector */}
                         <div
-                            className="flex items-center gap-2 pr-3 pl-1 group cursor-pointer h-full hover:bg-gray-50 dark:hover:bg-[#1e222d] transition-colors"
+                            className="flex items-center gap-2 pr-3 pl-1 group cursor-pointer h-full hover:bg-surface-hover transition-colors"
                         >
                             {headerLogo || (
                                 <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-xs">Z</div>
                             )}
                             <div className="flex flex-col leading-none">
-                                <span className="font-bold text-[13px] tracking-tight text-gray-900 dark:text-[#d1d4dc] uppercase">{activeSymbol}</span>
-                                <span className="text-[9px] font-medium text-gray-400 group-hover:text-blue-500 transition-colors uppercase">{headerTitle}</span>
+                                <span className="font-bold text-[13px] tracking-tight text-foreground uppercase">{activeSymbol}</span>
+                                <span className="text-[9px] font-medium text-text-muted group-hover:text-accent transition-colors uppercase">{headerTitle}</span>
                             </div>
                             <ChevronDown size={14} className="text-gray-400 ml-1" />
                         </div>
@@ -155,8 +164,8 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                     key={interval}
                                     onClick={() => onIntervalChange?.(interval)}
                                     className={`h-8 px-2.5 rounded text-[11px] font-semibold transition-all ${interval === activeInterval
-                                        ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 font-black border border-blue-200 dark:border-blue-500/20"
-                                        : "text-gray-500 hover:bg-gray-100 dark:hover:bg-[#1e222d] hover:text-gray-900 dark:hover:text-white"
+                                        ? "bg-accent/10 text-accent font-black"
+                                        : "text-text-muted hover:bg-surface-hover hover:text-foreground"
                                         }`}
                                 >
                                     {interval}
@@ -165,11 +174,12 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                         </div>
 
                         {/* Dash Layout Controls */}
-                        <div className="flex items-center gap-1 px-4 h-full border-l border-gray-100 dark:border-[#2a2e39]">
+                        <div className="flex items-center gap-1 px-4 h-full">
                             <Tip text="Toggle Watchlist">
                                 <button
                                     onClick={() => setShowWatchlist(!showWatchlist)}
-                                    className={`p-1.5 rounded transition-all ${showWatchlist ? 'text-blue-500 bg-blue-500/10' : 'text-gray-400'}`}
+                                    className={`p-1.5 rounded transition-all ${showWatchlist ? 'text-blue-500 bg-blue-500/10' : 'text-text-muted hover:text-foreground hover:bg-surface-hover'}`}
+                                    data-tour="watchlist-toggle"
                                 >
                                     <Globe size={16} />
                                 </button>
@@ -177,7 +187,8 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                             <Tip text="Toggle Option Chain">
                                 <button
                                     onClick={() => setShowOptionChain(!showOptionChain)}
-                                    className={`p-1.5 rounded transition-all ${showOptionChain ? 'text-blue-500 bg-blue-500/10' : 'text-gray-400'}`}
+                                    className={`p-1.5 rounded transition-all ${showOptionChain ? 'text-blue-500 bg-blue-500/10' : 'text-text-muted hover:text-foreground hover:bg-surface-hover'}`}
+                                    data-tour="option-chain-toggle"
                                 >
                                     <Layers size={16} />
                                 </button>
@@ -185,7 +196,8 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                             <Tip text="Toggle Positions">
                                 <button
                                     onClick={() => setShowPositions(!showPositions)}
-                                    className={`p-1.5 rounded transition-all ${showPositions ? 'text-blue-500 bg-blue-500/10' : 'text-gray-400'}`}
+                                    className={`p-1.5 rounded transition-all ${showPositions ? 'text-blue-500 bg-blue-500/10' : 'text-text-muted hover:text-foreground hover:bg-surface-hover'}`}
+                                    data-tour="positions-toggle"
                                 >
                                     <Target size={16} />
                                 </button>
@@ -193,62 +205,37 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                         </div>
                     </div>
 
-                    <div className="flex items-center gap-2 h-full divide-x divide-gray-100 dark:divide-[#2a2e39]">
+                    <div className="flex items-center gap-2 h-full">
                         <div className="flex items-center gap-3 pl-4">
-                            <div
-                                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-100 dark:bg-[#1e222d] border border-gray-200 dark:border-[#2a2e39] cursor-pointer hover:border-blue-500/50 transition-all shadow-sm"
-                            >
-                                {theme === 'dark' ? (
-                                    <Moon size={14} className="text-blue-400" />
-                                ) : (
-                                    <Sun size={14} className="text-yellow-500" />
-                                )}
-                                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{theme}</span>
-                            </div>
+                            <ThemeToggle />
 
-                            <button className="flex items-center gap-2 px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-[0_4px_12px_rgba(37,99,235,0.25)] transition-all active:scale-95">
-                                <Activity size={14} />
-                                <span>{isLoading ? "SYNCING..." : "TRADING TERMINAL"}</span>
-                                <ChevronDown size={14} className="opacity-50" />
-                            </button>
                         </div>
+
+                        <button className="flex items-center gap-2 px-5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-black shadow-[0_4px_12px_rgba(37,99,235,0.25)] transition-all active:scale-95">
+                            <Activity size={14} />
+                            <span>{isLoading ? "SYNCING..." : "TRADING TERMINAL"}</span>
+                            <ChevronDown size={14} className="opacity-50" />
+                        </button>
                     </div>
                 </header>
 
-                {/* Top Ad Banner */}
-                {/* <AdBanner position="top" dismissible={true}>
-                    <div className="flex items-center justify-center gap-3 py-2.5 px-4 bg-gradient-to-r from-emerald-50 to-teal-50 dark:from-emerald-950/20 dark:to-teal-950/20">
-                        <div className="flex-1 text-center">
-                            <p className="text-sm font-semibold text-gray-900 dark:text-white">
-                                💎 Premium Features • Real-Time Market Data, Advanced Indicators & AI Signals
-                            </p>
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
-                                Join 50,000+ traders using institutional-grade tools • 7-day free trial
-                            </p>
-                        </div>
-                        <button className="px-5 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold rounded-lg transition-all shadow-lg">
-                            Start Free Trial
-                        </button>
-                    </div>
-                </AdBanner> */}
 
                 <div className="flex flex-1 overflow-hidden relative">
                     {/* Professional Left Toolbar */}
-                    <aside className="w-[48px] border-r border-gray-200 dark:border-[#2a2e39] flex flex-col items-center py-2 space-y-1 bg-white dark:bg-[#131722] z-30">
+                    <aside className="w-[48px] flex flex-col items-center py-2 space-y-1 bg-surface z-30 transition-colors duration-theme" data-tour="tools">
                         <ToolButton active={activeTool === 'cursor'} onClick={() => setActiveTool('cursor')} icon={<Navigation size={18} className="rotate-[-45deg]" />} title="Cursor (Esc)" />
-                        <div className="w-8 h-[1px] bg-gray-100 dark:bg-[#2a2e39] my-1" />
+                        <div className="w-6 h-[1px] bg-surface-hover rounded-full my-1" />
 
                         <ToolButton active={activeTool === 'trendline'} onClick={() => setActiveTool('trendline')} icon={<Minus size={18} className="rotate-[135deg]" />} title="Trendline" />
                         <ToolButton active={activeTool === 'horizontalLine'} onClick={() => setActiveTool('horizontalLine')} icon={<StretchHorizontal size={18} />} title="Horizontal Line" />
                         <ToolButton active={activeTool === 'verticalLine'} onClick={() => setActiveTool('verticalLine')} icon={<StretchVertical size={18} />} title="Vertical Line" />
 
-                        <div className="w-8 h-[1px] bg-gray-100 dark:bg-[#2a2e39] my-1" />
+                        <div className="w-6 h-[1px] bg-surface-hover rounded-full my-1" />
 
                         <ToolButton active={activeTool === 'fibonacci'} onClick={() => setActiveTool('fibonacci')} icon={<LayoutGrid size={18} />} title="Fib Retracement" />
                         <ToolButton active={activeTool === 'rectangle'} onClick={() => setActiveTool('rectangle')} icon={<Square size={18} />} title="Geometric Shapes" />
 
-                        <div className="w-8 h-[1px] bg-gray-100 dark:bg-[#2a2e39] my-1" />
+                        <div className="w-6 h-[1px] bg-surface-hover rounded-full my-1" />
 
                         <ToolButton active={activeTool === 'text'} onClick={() => setActiveTool('text')} icon={<Type size={18} />} title="Annotation Tools" />
                         <ToolButton active={activeTool === 'priceRange'} onClick={() => setActiveTool('priceRange')} icon={<Ruler size={18} />} title="Measurement Tool" />
@@ -263,7 +250,7 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                     <div className="flex-1 flex flex-col overflow-hidden relative">
                         <div className="flex flex-1 overflow-hidden relative">
                             {/* Main Chart Area */}
-                            <main className="flex-1 relative bg-white dark:bg-[#131722] overflow-hidden">
+                            <main className="flex-1 relative bg-chart-bg overflow-hidden transition-colors duration-theme" data-tour="chart">
                                 <TradingChart
                                     data={data}
                                     activeTool={activeTool}
@@ -281,9 +268,10 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                         animate={{ x: 0 }}
                                         exit={{ x: 600 }}
                                         className="h-full"
+                                        data-tour="option-chain"
                                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                                     >
-                                        <OptionChain />
+                                        <OptionChain onClose={() => setShowOptionChain(false)} />
                                     </motion.div>
                                 )}
                             </AnimatePresence>
@@ -322,10 +310,10 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                         initial={{ height: 0 }}
                                         animate={{ height: "auto" }}
                                         exit={{ height: 0 }}
-                                        className="overflow-hidden border-t border-gray-200 dark:border-[#2a2e39]"
+                                        className="overflow-hidden"
                                         transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                                     >
-                                        <PositionsPanel onToggle={() => setShowPositions(false)} />
+                                        <PositionsTable onToggle={() => setShowPositions(false)} />
                                     </motion.div>
                                 ) : (
                                     <motion.div
@@ -334,15 +322,15 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                         animate={{ opacity: 1, y: 0 }}
                                         exit={{ opacity: 0, y: 10 }}
                                         onClick={() => setShowPositions(true)}
-                                        className="h-8 bg-white dark:bg-[#1e222d] border-t border-gray-200 dark:border-[#2a2e39] flex items-center justify-between px-4 cursor-pointer hover:bg-gray-50 dark:hover:bg-[#2a2e39] transition-colors group"
+                                        className="h-8 bg-surface-elevated flex items-center justify-between px-4 cursor-pointer hover:bg-surface-hover transition-colors group"
                                     >
                                         <div className="flex items-center gap-3">
                                             <Target size={14} className="text-blue-500" />
-                                            <span className="text-[10px] font-black uppercase tracking-widest text-gray-400 group-hover:text-blue-500 transition-colors">Positions (3)</span>
+                                            <span className="text-[10px] font-black uppercase tracking-widest text-text-muted group-hover:text-accent transition-colors">Positions (3)</span>
                                         </div>
                                         <div className="flex items-center gap-4">
                                             <div className="flex items-center gap-2">
-                                                <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Total P&L:</span>
+                                                <span className="text-[9px] font-black text-text-muted uppercase tracking-widest">Total P&L:</span>
                                                 <span className="text-[10px] font-black text-emerald-500 tabular-nums">+₹445.00</span>
                                             </div>
                                             <ChevronUp size={16} className="text-gray-400 group-hover:text-blue-500 transition-all" />
@@ -363,7 +351,7 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                 className="overflow-hidden h-full"
                                 transition={{ type: 'spring', damping: 25, stiffness: 200 }}
                             >
-                                <div className="w-80 h-full">
+                                <div className="w-80 h-full" data-tour="watchlist">
                                     <WatchlistManager />
                                 </div>
                             </motion.div>
@@ -372,36 +360,53 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                 </div>
 
                 {/* Professional Status Bar */}
-                <footer className="h-9 border-t border-gray-200 dark:border-[#2a2e39] bg-white dark:bg-[#131722] flex items-center px-3 justify-between text-[11px] font-bold text-gray-500 dark:text-[#787b86] z-40">
+                <footer className="h-9 bg-surface flex items-center px-3 justify-between text-[11px] font-bold text-text-muted z-40 transition-colors duration-theme">
                     <div className="flex items-center gap-5">
-                        <div className="flex items-center gap-2 group cursor-pointer">
+                        <div className="flex items-center gap-2 group cursor-pointer text-text-secondary hover:text-foreground transition-colors">
                             <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)] animate-pulse" />
-                            <span className="group-hover:text-gray-900 dark:group-hover:text-[#d1d4dc] transition-colors uppercase tracking-tight">Data Stream: Online</span>
+                            <span className="uppercase tracking-tight">Data Stream: Online</span>
                         </div>
                         <div className="flex items-center gap-4 text-[10px] opacity-60">
                             <span className="flex items-center gap-1 font-black text-blue-500 uppercase tracking-widest shrink-0">ZENITH v1.0.4</span>
-                            <span className="flex items-center gap-1 border-l border-gray-200 dark:border-[#2a2e39] pl-4"><Command size={11} /> Dashboard Mode</span>
+                            <span className="flex items-center gap-1 pl-4"><Command size={11} /> Dashboard Mode</span>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-6">
-                        <div className="flex items-center gap-1.5 px-3 py-1 bg-gray-50 dark:bg-[#1e222d] rounded-md border border-gray-100 dark:border-[#2a2e39]">
+                        <div className="flex items-center gap-1.5 px-3 py-1 bg-surface-hover rounded-md">
                             <Lock size={12} className="text-emerald-500" />
                             <span className="text-[10px] uppercase font-black text-emerald-500 tracking-wider">SECURE TRANSACTION TUNNEL</span>
                         </div>
                     </div>
                 </footer>
-                <OrderModal />
-            </div>
-        </Tooltip.Provider>
+
+
+                {/* Modals */}
+
+
+                <ConfirmationModal
+                    isOpen={showExitAllConfirm}
+                    onClose={() => setShowExitAllConfirm(false)}
+                    onConfirm={exitAllPositions}
+                    title="Exit All Positions"
+                    message="Are you sure you want to exit all positions? This will close all your active trades immediately at market price."
+                    confirmText="Exit All"
+                    cancelText="Cancel"
+                    variant="danger"
+                />
+
+                {/* Walkthrough for first-time users */}
+                <Walkthrough />
+            </div >
+        </Tooltip.Provider >
     );
 };
 
 // Helper Components
 const NavButton = ({ icon, label, count }: { icon: React.ReactNode, label: string, count?: number }) => (
-    <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-[#1e222d] rounded-md cursor-pointer transition-all border border-transparent hover:border-gray-200 dark:hover:border-[#2a2e39] group">
-        <span className="text-gray-500 dark:text-[#b2b5be] group-hover:text-blue-500 transition-colors">{icon}</span>
-        <span className="text-[12px] font-bold text-gray-600 dark:text-[#d1d4dc] group-hover:text-blue-500 transition-colors">{label}</span>
+    <div className="flex items-center gap-2 px-3 py-1.5 hover:bg-surface-hover rounded-md cursor-pointer transition-all group">
+        <span className="text-text-secondary group-hover:text-accent transition-colors">{icon}</span>
+        <span className="text-[12px] font-bold text-foreground group-hover:text-accent transition-colors">{label}</span>
         {count && count > 0 ? (
             <span className="ml-1 px-1.5 py-0.5 bg-blue-500 text-white text-[9px] font-black rounded-full">{count}</span>
         ) : null}
@@ -409,36 +414,36 @@ const NavButton = ({ icon, label, count }: { icon: React.ReactNode, label: strin
 );
 
 const NavIconButton = ({ icon, onClick }: { icon: React.ReactNode, onClick?: () => void }) => (
-    <div onClick={onClick} className="p-2 text-gray-400 dark:text-[#787b86] hover:text-gray-900 dark:hover:text-[#d1d4dc] hover:bg-gray-100 dark:hover:bg-[#2a2e39] rounded-lg cursor-pointer transition-all">
+    <div onClick={onClick} className="p-2 text-text-muted hover:text-foreground hover:bg-surface-hover rounded-lg cursor-pointer transition-all">
         {icon}
     </div>
 );
 
-const Tip = ({ children, text }: { children: React.ReactNode, text: string }) => (
+const Tip = ({ children, text, side = "bottom" }: { children: React.ReactNode, text: string, side?: "top" | "right" | "bottom" | "left" }) => (
     <Tooltip.Root>
         <Tooltip.Trigger asChild>
             {children}
         </Tooltip.Trigger>
         <Tooltip.Portal>
             <Tooltip.Content
-                side="bottom"
+                side={side}
                 sideOffset={8}
-                className="bg-[#1e222d] text-[#d1d4dc] text-[10px] font-black px-2.5 py-1.5 rounded shadow-xl z-[100] animate-in fade-in zoom-in-95 border border-[#363a45] pointer-events-none uppercase tracking-widest"
+                className="bg-foreground text-background text-[10px] font-black px-2.5 py-1.5 rounded-lg shadow-xl z-[100] animate-in fade-in zoom-in-95 pointer-events-none uppercase tracking-widest"
             >
                 {text}
-                <Tooltip.Arrow className="fill-[#1e222d]" />
+                <Tooltip.Arrow className="fill-foreground" />
             </Tooltip.Content>
         </Tooltip.Portal>
     </Tooltip.Root>
 );
 
 const ToolButton = ({ active, onClick, icon, title }: { active: boolean, onClick: () => void, icon: React.ReactNode, title: string }) => (
-    <Tip text={title}>
+    <Tip text={title} side="right">
         <div
             onClick={onClick}
             className={`w-9 h-9 flex items-center justify-center rounded-lg cursor-pointer transition-all duration-150 ${active
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-1 ring-blue-400/50'
-                : 'text-gray-500 dark:text-[#b2b5be] hover:bg-gray-100 dark:hover:bg-[#2a2e39] hover:text-blue-500 dark:hover:text-white'
+                ? 'bg-accent text-white shadow-lg shadow-accent/30 ring-1 ring-accent/50'
+                : 'text-text-secondary hover:bg-surface-hover hover:text-accent'
                 }`}
         >
             {icon}

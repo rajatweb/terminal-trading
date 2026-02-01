@@ -3,9 +3,9 @@
 
 import React, { useState } from "react";
 import { useTerminalStore } from "@/stores/terminalStore";
-import { ChevronDown, Filter, Info, Layers, Maximize2, RefreshCw } from "lucide-react";
+import { ChevronDown, Filter, Info, Layers, Maximize2, RefreshCw, XCircle } from "lucide-react";
 
-export const OptionChain: React.FC = () => {
+export const OptionChain: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
     const { activeSymbol, optionChain, openOrderModal } = useTerminalStore();
     const [activeExpiry, setActiveExpiry] = useState("25 JAN 2024");
 
@@ -32,26 +32,34 @@ export const OptionChain: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#131722] border-l border-gray-200 dark:border-[#2a2e39] w-[600px] z-20">
+        <div className="flex flex-col h-full bg-surface w-[600px] z-20 transition-colors duration-theme">
             {/* Header ... */}
-            <div className="h-12 px-4 border-b border-gray-200 dark:border-[#2a2e39] flex items-center justify-between bg-gray-50/50 dark:bg-black/10">
+            <div className="h-12 px-4 flex items-center justify-between bg-surface-hover">
                 <div className="flex items-center gap-3">
                     <span className="text-[12px] font-black text-blue-600 uppercase tracking-tighter">{activeSymbol} Chain</span>
-                    <div className="flex items-center gap-2 px-2 py-1 bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#2a2e39] rounded cursor-pointer group">
-                        <span className="text-[10px] font-bold text-gray-500 group-hover:text-blue-500 transition-colors uppercase">{activeExpiry}</span>
-                        <ChevronDown size={12} className="text-gray-400" />
+                    <div className="flex items-center gap-2 px-2 py-1 bg-surface-elevated rounded cursor-pointer group">
+                        <span className="text-[10px] font-bold text-text-muted group-hover:text-blue-500 transition-colors uppercase">{activeExpiry}</span>
+                        <ChevronDown size={12} className="text-text-muted" />
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#2a2e39] rounded text-gray-400 hover:text-blue-500 transition-all"><Filter size={14} /></button>
-                    <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#2a2e39] rounded text-gray-400 hover:text-blue-500 transition-all"><RefreshCw size={14} /></button>
+                    <button className="p-1.5 hover:bg-surface-hover rounded text-text-muted hover:text-accent transition-all"><Filter size={14} /></button>
+                    <button className="p-1.5 hover:bg-surface-hover rounded text-text-muted hover:text-accent transition-all"><RefreshCw size={14} /></button>
+                    {onClose && (
+                        <button
+                            onClick={onClose}
+                            className="p-1.5 hover:bg-surface-hover rounded text-text-muted hover:text-rose-500 transition-all ml-1"
+                        >
+                            <XCircle size={16} />
+                        </button>
+                    )}
                 </div>
             </div>
 
             {/* Table Header ... */}
-            <div className="grid grid-cols-11 border-b border-gray-200 dark:border-[#2a2e39] bg-gray-50/30 dark:bg-black/5">
+            <div className="grid grid-cols-11 bg-surface-hover/30">
                 {/* CALLS */}
-                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center py-2 border-r border-gray-100 dark:border-[#2a2e39]/30">
+                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-text-muted uppercase tracking-widest text-center py-2">
                     <span className="text-emerald-500 opacity-60">OI</span>
                     <span>VOL</span>
                     <span>IV</span>
@@ -63,7 +71,7 @@ export const OptionChain: React.FC = () => {
                     STRIKE
                 </div>
                 {/* PUTS */}
-                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center py-2 border-l border-gray-100 dark:border-[#2a2e39]/30">
+                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-text-muted uppercase tracking-widest text-center py-2">
                     <span className="text-rose-500">LTP</span>
                     <span>CHG</span>
                     <span>IV</span>
@@ -82,18 +90,18 @@ export const OptionChain: React.FC = () => {
                     return (
                         <div
                             key={s.strike}
-                            className={`grid grid-cols-11 border-b border-gray-100 dark:border-[#2a2e39]/30 hover:bg-gray-50 dark:hover:bg-[#1e222d] transition-colors group ${isATM ? 'ring-1 ring-inset ring-blue-500/30' : ''
+                            className={`grid grid-cols-11 hover:bg-surface-hover transition-colors group ${isATM ? 'ring-1 ring-inset ring-accent/30' : ''
                                 }`}
                         >
                             {/* CE Data */}
-                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-r border-gray-100 dark:border-[#2a2e39]/10 items-center ${isITM_CE ? 'bg-emerald-500/5 dark:bg-emerald-500/5' : ''
+                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 items-center ${isITM_CE ? 'bg-emerald-500/5' : ''
                                 }`}>
                                 <span className="text-center opacity-70 tabular-nums">{s.ce.oi}L</span>
                                 <span className="text-center opacity-70 tabular-nums">{s.ce.volume}k</span>
                                 <span className="text-center opacity-50 tabular-nums">{s.ce.iv}</span>
                                 <span className="text-center text-emerald-500 font-bold tabular-nums">+{s.ce.change}%</span>
                                 <div className="relative flex items-center justify-center group/ltp">
-                                    <span className="font-black text-gray-900 dark:text-[#d1d4dc] tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.ce.ltp.toFixed(2)}</span>
+                                    <span className="font-black text-foreground tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.ce.ltp.toFixed(2)}</span>
                                     <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover/ltp:opacity-100 transition-all scale-90 group-hover/ltp:scale-100">
                                         <button
                                             onClick={() => handleOrder('BUY', 'CE', s.strike, s.ce.ltp)}
@@ -114,10 +122,10 @@ export const OptionChain: React.FC = () => {
                             </div>
 
                             {/* PE Data */}
-                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-l border-gray-100 dark:border-[#2a2e39]/10 items-center ${isITM_PE ? 'bg-rose-500/5 dark:bg-rose-500/5' : ''
+                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 items-center ${isITM_PE ? 'bg-rose-500/5' : ''
                                 }`}>
                                 <div className="relative flex items-center justify-center group/ltp">
-                                    <span className="font-black text-gray-900 dark:text-[#d1d4dc] tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.pe.ltp.toFixed(2)}</span>
+                                    <span className="font-black text-foreground tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.pe.ltp.toFixed(2)}</span>
                                     <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover/ltp:opacity-100 transition-all scale-90 group-hover/ltp:scale-100">
                                         <button
                                             onClick={() => handleOrder('BUY', 'PE', s.strike, s.pe.ltp)}
@@ -140,7 +148,7 @@ export const OptionChain: React.FC = () => {
             </div>
 
             {/* Bottom Meta */}
-            <div className="h-10 px-4 border-t border-gray-200 dark:border-[#2a2e39] flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase bg-gray-50/50 dark:bg-black/10">
+            <div className="h-10 px-4 flex items-center justify-between text-[10px] font-bold text-text-muted uppercase bg-surface-hover/50">
                 <div className="flex items-center gap-4">
                     <span className="flex items-center gap-1.5"><Info size={12} className="text-blue-500" /> Greeks Calibrated</span>
                     <span className="flex items-center gap-1.5"><Layers size={12} /> Straddle: 1540.20</span>

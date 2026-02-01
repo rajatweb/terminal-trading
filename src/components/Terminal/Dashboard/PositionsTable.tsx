@@ -24,9 +24,9 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
     const isPnLUp = totalPnL >= 0;
 
     return (
-        <div className="h-64 border-t border-gray-200 dark:border-[#2a2e39] bg-white dark:bg-[#131722] flex flex-col z-20 overflow-hidden">
+        <div className="h-64 bg-surface flex flex-col z-20 overflow-hidden transition-colors duration-theme">
             {/* Tabs Header */}
-            <div className="h-10 px-2 flex items-center justify-between border-b border-gray-100 dark:border-[#2a2e39] bg-gray-50/50 dark:bg-black/10">
+            <div className="h-10 px-2 flex items-center justify-between bg-surface-elevated">
                 <div className="flex items-center gap-1 h-full">
                     <Tab active={activeTab === 'positions'} onClick={() => setActiveTab('positions')} icon={<Target size={14} />} label="Positions" count={positions.length} />
                     <Tab active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={<LayoutList size={14} />} label="Orders" />
@@ -36,7 +36,7 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
 
                 <div className="flex items-center gap-4 pr-3">
                     <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total P&L</span>
+                        <span className="text-[10px] font-black text-text-muted uppercase tracking-widest">Total P&L</span>
                         <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-black tabular-nums ${isPnLUp ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                             }`}>
                             {isPnLUp ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
@@ -49,7 +49,7 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                     {onToggle && (
                         <button
                             onClick={onToggle}
-                            className="p-1 hover:bg-gray-200 dark:hover:bg-[#2a2e39] rounded transition-colors text-gray-400 hover:text-blue-500"
+                            className="p-1 hover:bg-surface-hover rounded transition-colors text-text-muted hover:text-accent"
                         >
                             <ChevronDown size={18} />
                         </button>
@@ -61,20 +61,20 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
             <div className="flex-1 overflow-auto custom-scrollbar">
                 <table className="w-full border-collapse">
                     <thead>
-                        <tr className="sticky top-0 bg-white dark:bg-[#131722] border-b border-gray-100 dark:border-[#2a2e39] z-10">
-                            <th className="px-4 py-2.5 text-left text-[10px] font-black text-gray-400 uppercase tracking-tighter w-12 text-center">Type</th>
-                            <th className="px-4 py-2.5 text-left text-[10px] font-black text-gray-400 uppercase tracking-tighter">Instrument</th>
-                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-gray-400 uppercase tracking-tighter">Qty</th>
-                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-gray-400 uppercase tracking-tighter">Avg. Price</th>
-                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-gray-400 uppercase tracking-tighter">LTP</th>
-                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-gray-400 uppercase tracking-tighter">PnL</th>
-                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-gray-400 uppercase tracking-tighter">Chg%</th>
-                            <th className="px-4 py-2.5 text-center text-[10px] font-black text-gray-400 uppercase tracking-tighter">Actions</th>
+                        <tr className="sticky top-0 bg-surface-elevated z-10">
+                            <th className="px-4 py-2.5 text-left text-[10px] font-black text-text-muted uppercase tracking-tighter w-12 text-center">Type</th>
+                            <th className="px-4 py-2.5 text-left text-[10px] font-black text-text-muted uppercase tracking-tighter">Instrument</th>
+                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-text-muted uppercase tracking-tighter">Qty</th>
+                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-text-muted uppercase tracking-tighter">Avg. Price</th>
+                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-text-muted uppercase tracking-tighter">LTP</th>
+                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-text-muted uppercase tracking-tighter">PnL</th>
+                            <th className="px-4 py-2.5 text-right text-[10px] font-black text-text-muted uppercase tracking-tighter">Chg%</th>
+                            <th className="px-4 py-2.5 text-center text-[10px] font-black text-text-muted uppercase tracking-tighter">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
                         {positions.map((pos, idx) => (
-                            <tr key={`${pos.symbol}-${idx}`} className="border-b border-gray-50 dark:border-[#2a2e39]/30 hover:bg-gray-50 dark:hover:bg-[#1e222d] group transition-colors">
+                            <tr key={`${pos.symbol}-${idx}`} className="hover:bg-surface-hover group transition-colors">
                                 <td className="px-4 py-3 text-center">
                                     <span className={`px-1.5 py-0.5 rounded-sm text-[9px] font-black ${pos.type === 'BUY' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-rose-500/10 text-rose-500'
                                         }`}>
@@ -83,13 +83,13 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                                 </td>
                                 <td className="px-4 py-3">
                                     <div className="flex flex-col">
-                                        <span className="text-[12px] font-bold text-gray-900 dark:text-[#d1d4dc] group-hover:text-blue-500 transition-colors uppercase">{pos.symbol}</span>
-                                        <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">NSE • EQUITY</span>
+                                        <span className="text-[12px] font-bold text-foreground group-hover:text-accent transition-colors uppercase">{pos.symbol}</span>
+                                        <span className="text-[9px] font-bold text-text-muted uppercase tracking-widest">NSE • EQUITY</span>
                                     </div>
                                 </td>
-                                <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-gray-900 dark:text-[#d1d4dc] tabular-nums">{pos.qty}</td>
-                                <td className="px-4 py-3 text-right text-[12px] font-bold font-mono text-gray-500 tabular-nums">{pos.entryPrice.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-gray-900 dark:text-[#d1d4dc] tabular-nums">{pos.currentPrice.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums">{pos.qty}</td>
+                                <td className="px-4 py-3 text-right text-[12px] font-bold font-mono text-text-muted tabular-nums">{pos.entryPrice.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums">{pos.currentPrice.toFixed(2)}</td>
                                 <td className={`px-4 py-3 text-right text-[12px] font-black font-mono tabular-nums ${pos.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                                     {pos.pnl >= 0 ? "+" : ""}{pos.pnl.toFixed(2)}
                                 </td>
@@ -98,8 +98,8 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                                 </td>
                                 <td className="px-4 py-3 text-center">
                                     <div className="flex items-center justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                        <button className="px-3 py-1 bg-gray-100 dark:bg-[#2a2e39] hover:bg-rose-500 hover:text-white rounded text-[10px] font-black transition-all">CLOSE</button>
-                                        <button className="p-1 hover:text-blue-500"><MoreHorizontal size={14} /></button>
+                                        <button className="px-3 py-1 bg-surface-hover hover:bg-rose-500 hover:text-white rounded text-[10px] font-black transition-all">CLOSE</button>
+                                        <button className="p-1 hover:text-foreground hover:bg-surface-hover rounded transition-colors"><MoreHorizontal size={14} /></button>
                                     </div>
                                 </td>
                             </tr>
@@ -115,9 +115,9 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
             </div>
 
             {/* Summary Footer */}
-            <div className="h-8 px-4 border-t border-gray-200 dark:border-[#2a2e39] flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-black/10">
-                <span className="flex items-center gap-1.5"><Wallet size={12} /> Margin Available: <span className="text-[#d1d4dc] tabular-nums">{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
-                <span className="flex items-center gap-1.5"><Target size={12} /> Margin Used: <span className="text-rose-500 tabular-nums">{marginUsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
+            <div className="h-8 px-4 flex items-center gap-6 text-[10px] font-black text-text-muted uppercase tracking-widest bg-surface-hover/50">
+                <span className="flex items-center gap-1.5"><Wallet size={12} /> Margin Available: <span className="text-foreground tabular-nums">{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
+                <span className="flex items-center gap-1.5"><Target size={12} /> Margin Used: <span className="text-danger tabular-nums">{marginUsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
                 <div className="flex-1" />
                 <span className="flex items-center gap-1.5 text-blue-500 cursor-pointer hover:underline underline-offset-4 decoration-2"><History size={11} /> View Detailed Order History</span>
             </div>
@@ -128,15 +128,15 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
 const Tab = ({ active, onClick, icon, label, count }: { active: boolean, onClick: () => void, icon: React.ReactNode, label: string, count?: number }) => (
     <div
         onClick={onClick}
-        className={`px-4 flex items-center h-full gap-2 cursor-pointer transition-all border-b-2 ${active
-            ? 'border-blue-600 bg-blue-500/5 text-blue-600'
-            : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-[#d1d4dc] hover:bg-gray-100 dark:hover:bg-[#2a2e39]'
+        className={`px-4 flex items-center h-full gap-2 cursor-pointer transition-all ${active
+            ? 'bg-accent/10 text-accent'
+            : 'text-text-muted hover:text-foreground hover:bg-surface-hover'
             }`}
     >
         {icon}
         <span className="text-[11px] font-black uppercase tracking-wider">{label}</span>
         {count !== undefined && (
-            <span className={`px-1 rounded-sm text-[9px] font-black ${active ? 'bg-blue-600 text-white' : 'bg-gray-200 dark:bg-[#2a2e39] text-gray-500'
+            <span className={`px-1 rounded-sm text-[9px] font-black ${active ? 'bg-accent text-white shadow-sm' : 'bg-surface-hover text-text-muted'
                 }`}>
                 {count}
             </span>

@@ -55,17 +55,40 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const [chartSettings, setChartSettings] = useState<ChartSettings>(DEFAULT_CHART_SETTINGS);
     const [hoveredCandle, setHoveredCandle] = useState<OHLCV | null>(null);
 
-    const { theme, setTheme } = useTheme();
+    const { theme, setTheme, resolvedTheme } = useTheme();
+    const effectiveTheme = resolvedTheme || theme || 'light';
+
+    // Sync chart settings with theme changes (use resolvedTheme for system preference)
+    useEffect(() => {
+        if (!effectiveTheme) return;
+
+        const isDark = effectiveTheme === 'dark';
+        setChartSettings(prev => ({
+            ...prev,
+            appearance: {
+                ...prev.appearance,
+                background: isDark ? '#09090b' : '#ffffff',
+                gridColor: isDark ? '#18181b' : '#f1f5f9',
+            },
+            scales: {
+                ...prev.scales,
+                textColor: isDark ? '#a1a1aa' : '#64748b',
+            }
+        }));
+    }, [effectiveTheme]);
 
     const selectedDrawing = drawings.find(d => d.id === selectedId);
 
-    const colors = useMemo(() => ({
-        grid: theme === 'dark' ? '#2a2e39' : '#f0f3fa',
-        text: theme === 'dark' ? '#787b86' : '#6b7280',
-        crosshair: theme === 'dark' ? '#9ca3af' : '#6b7280',
-        bg: theme === 'dark' ? '#131722' : '#ffffff',
-        accent: '#2962ff'
-    }), [theme]);
+    const colors = useMemo(() => {
+        const isDark = effectiveTheme === 'dark';
+        return {
+            grid: chartSettings.appearance.gridColor,
+            text: chartSettings.scales.textColor,
+            crosshair: isDark ? '#a1a1aa' : '#64748b',
+            bg: chartSettings.appearance.background,
+            accent: isDark ? '#3b82f6' : '#2563eb'
+        };
+    }, [effectiveTheme, chartSettings]);
 
     const [currentXScale, setCurrentXScale] = useState<d3.ScaleLinear<number, number> | null>(null);
     const [yScale, setYScale] = useState<d3.ScaleLinear<number, number> | null>(null);
@@ -235,8 +258,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             const time = getTimeAtIndex(idx).toString(), price = currentScaleY.invert(cy);
 
             if (activeTool !== 'cursor') {
+                const drawingColor = effectiveTheme === 'dark' ? '#b2b5be' : '#2a2e39';
                 if (activeTool === 'horizontalLine' || activeTool === 'verticalLine') {
-                    setDrawings(p => [...p, { id: Date.now(), type: activeTool as any, t1: time, p1: price, color: theme === 'dark' ? '#b2b5be' : '#2a2e39', width: 2, style: 'solid', locked: false, opacity: 100 }]);
+                    setDrawings(p => [...p, { id: Date.now(), type: activeTool as any, t1: time, p1: price, color: drawingColor, width: 2, style: 'solid', locked: false, opacity: 100 }]);
                     onToolComplete?.();
                 } else if (!drawingPoints.current) {
                     drawingPoints.current = { t: time, p: price };
@@ -248,7 +272,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                             type: activeTool as any,
                             t1: p1.t, p1: p1.p,
                             t2: time, p2: price,
-                            color: theme === 'dark' ? '#b2b5be' : '#2a2e39',
+                            color: drawingColor,
                             width: 2, style: 'solid',
                             locked: false, opacity: 100,
                             fibSettings: activeTool === 'fibonacci' ? {
@@ -276,7 +300,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
-    }, [data, dimensions, drawings.length, activeTool, theme, colors, chartSettings]);
+    }, [data, dimensions, drawings.length, activeTool, effectiveTheme, colors, chartSettings]);
 
     const updateSelectedDrawing = (updates: Partial<Drawing>) => {
         if (!selectedId) return;
@@ -322,18 +346,18 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                     {chartSettings.appearance.legendVisible && (
                         <div className="absolute top-3 left-4 z-20 flex flex-col pointer-events-none gap-0.5">
                             <div className="flex items-center gap-3">
-                                <span className="text-sm font-black text-gray-900 dark:text-[#d1d4dc] uppercase tracking-tighter">{symbol} • {interval} • NSE</span>
+                                <span className="text-sm font-black text-foreground uppercase tracking-tighter">{symbol} • {interval} • NSE</span>
                                 <div className="flex items-center gap-1">
                                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                     <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Market Open</span>
                                 </div>
                             </div>
                             <div className="flex items-center gap-4 text-[11px] font-bold font-mono">
-                                <div className="flex items-center gap-1.5 border-r border-gray-200 dark:border-[#2a2e39] pr-3">
-                                    <span className="text-gray-400">O</span><span className="dark:text-[#d1d4dc]">{currentCandle.open.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">H</span><span className="dark:text-[#d1d4dc]">{currentCandle.high.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">L</span><span className="dark:text-[#d1d4dc]">{currentCandle.low.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">C</span><span className={currentCandle.close >= currentCandle.open ? 'text-emerald-500' : 'text-rose-500'}>{currentCandle.close.toFixed(2)}</span>
+                                <div className="flex items-center gap-1.5 pr-3">
+                                    <span className="text-text-muted">O</span><span className="text-foreground">{currentCandle.open.toFixed(2)}</span>
+                                    <span className="text-text-muted ml-2">H</span><span className="text-foreground">{currentCandle.high.toFixed(2)}</span>
+                                    <span className="text-text-muted ml-2">L</span><span className="text-foreground">{currentCandle.low.toFixed(2)}</span>
+                                    <span className="text-text-muted ml-2">C</span><span className={currentCandle.close >= currentCandle.open ? 'text-emerald-500' : 'text-rose-500'}>{currentCandle.close.toFixed(2)}</span>
                                 </div>
                             </div>
                         </div>
@@ -344,7 +368,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         {currentXScale && yScale && (
                             <g transform="translate(10, 10)" clipPath="url(#chart-clip)">
                                 {drawings.map(d => (
-                                    <DrawingRenderer key={d.id} drawing={d} xScale={currentXScale} yScale={yScale} chartWidth={dimensions.width - 70} chartHeight={dimensions.height - 40} isSelected={selectedId === d.id} onSelect={setSelectedId} theme={theme || 'light'} textColor={colors.text} baseTime={data[0].time} step={getIntervalStep()} />
+                                    <DrawingRenderer key={d.id} drawing={d} xScale={currentXScale} yScale={yScale} chartWidth={dimensions.width - 70} chartHeight={dimensions.height - 40} isSelected={selectedId === d.id} onSelect={setSelectedId} theme={effectiveTheme} textColor={colors.text} baseTime={data[0].time} step={getIntervalStep()} />
                                 ))}
                                 {drawingPoints.current && previewPoint && (
                                     <PreviewRenderer type={activeTool} point1={drawingPoints.current} point2={previewPoint} xScale={currentXScale} yScale={yScale} textColor={colors.text} baseTime={data[0].time} step={getIntervalStep()} />
@@ -361,15 +385,15 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         <Dialog.Portal>
                             <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[100]" />
                             <Dialog.Content asChild>
-                                <motion.div drag dragMomentum={false} initial={{ opacity: 0, scale: 0.98, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} className="fixed top-1/2 left-1/2 w-[400px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded-xl shadow-2xl z-[101] outline-none overflow-hidden flex flex-col">
-                                    <div className="h-11 border-b border-gray-100 dark:border-[#363a45] flex items-center px-4 justify-between bg-gray-50/50 dark:bg-black/10 cursor-grab active:cursor-grabbing shrink-0">
+                                <motion.div drag dragMomentum={false} initial={{ opacity: 0, scale: 0.98, x: "-50%", y: "-50%" }} animate={{ opacity: 1, scale: 1, x: "-50%", y: "-50%" }} className="fixed top-1/2 left-1/2 w-[400px] bg-surface-elevated rounded-xl shadow-2xl z-[101] outline-none overflow-hidden flex flex-col">
+                                    <div className="h-11 flex items-center px-4 justify-between bg-surface-hover/50 cursor-grab active:cursor-grabbing shrink-0">
                                         <div className="flex items-center gap-2">
                                             <Settings size={16} className="text-blue-500" />
                                             <Dialog.Title asChild>
-                                                <span className="text-[12px] font-black uppercase tracking-widest text-gray-900 dark:text-[#d1d4dc]">{selectedDrawing?.type} Settings</span>
+                                                <span className="text-[12px] font-black uppercase tracking-widest text-foreground">{selectedDrawing?.type} Settings</span>
                                             </Dialog.Title>
                                         </div>
-                                        <Dialog.Close className="text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors p-1"><X size={18} /></Dialog.Close>
+                                        <Dialog.Close className="text-text-muted hover:text-foreground transition-colors p-1"><X size={18} /></Dialog.Close>
                                     </div>
                                     <div className="p-5 space-y-6 max-h-[400px] overflow-y-auto">
                                         {selectedDrawing?.type === 'fibonacci' ? (
@@ -377,11 +401,11 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                                 <div className="space-y-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-4 w-1 bg-blue-500 rounded-full" />
-                                                        <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500">Fibonacci Levels</h3>
+                                                        <h3 className="text-[11px] font-black uppercase tracking-wider text-text-muted">Fibonacci Levels</h3>
                                                     </div>
                                                     <div className="space-y-2">
                                                         {selectedDrawing.fibSettings?.levels.map((level, idx) => (
-                                                            <div key={idx} className="flex items-center gap-3 p-2 hover:bg-gray-50 dark:hover:bg-black/10 rounded-lg">
+                                                            <div key={idx} className="flex items-center gap-3 p-2 hover:bg-surface-hover rounded-lg">
                                                                 <input
                                                                     type="checkbox"
                                                                     checked={level.visible}
@@ -392,7 +416,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                                                     }}
                                                                     className="w-4 h-4 rounded text-blue-600"
                                                                 />
-                                                                <span className="text-[11px] font-bold text-gray-600 dark:text-[#d1d4dc] w-16">{(level.level * 100).toFixed(1)}%</span>
+                                                                <span className="text-[11px] font-bold text-foreground w-16">{(level.level * 100).toFixed(1)}%</span>
                                                                 <input
                                                                     type="color"
                                                                     value={level.color}
@@ -408,14 +432,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                                     </div>
                                                 </div>
 
-                                                <div className="space-y-4 pt-4 border-t border-gray-100 dark:border-[#363a45]">
+                                                <div className="space-y-4 pt-4">
                                                     <div className="flex items-center gap-3">
                                                         <div className="h-4 w-1 bg-blue-500 rounded-full" />
-                                                        <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500">Display Options</h3>
+                                                        <h3 className="text-[11px] font-black uppercase tracking-wider text-text-muted">Display Options</h3>
                                                     </div>
                                                     <div className="space-y-2">
-                                                        <label className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-black/10 rounded-lg cursor-pointer">
-                                                            <span className="text-[12px] font-medium text-gray-600 dark:text-[#b2b5be]">Show Background</span>
+                                                        <label className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg cursor-pointer">
+                                                            <span className="text-[12px] font-medium text-text-secondary">Show Background</span>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={selectedDrawing.fibSettings?.showBackground}
@@ -423,8 +447,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                                                 className="w-4 h-4 rounded text-blue-600"
                                                             />
                                                         </label>
-                                                        <label className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-black/10 rounded-lg cursor-pointer">
-                                                            <span className="text-[12px] font-medium text-gray-600 dark:text-[#b2b5be]">Extend Left</span>
+                                                        <label className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg cursor-pointer">
+                                                            <span className="text-[12px] font-medium text-text-secondary">Extend Left</span>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={selectedDrawing.fibSettings?.extendLeft}
@@ -432,8 +456,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                                                 className="w-4 h-4 rounded text-blue-600"
                                                             />
                                                         </label>
-                                                        <label className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-black/10 rounded-lg cursor-pointer">
-                                                            <span className="text-[12px] font-medium text-gray-600 dark:text-[#b2b5be]">Extend Right</span>
+                                                        <label className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg cursor-pointer">
+                                                            <span className="text-[12px] font-medium text-text-secondary">Extend Right</span>
                                                             <input
                                                                 type="checkbox"
                                                                 checked={selectedDrawing.fibSettings?.extendRight}
@@ -446,17 +470,17 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                             </>
                                         ) : (
                                             <div className="space-y-4">
-                                                <div className="flex items-center gap-3"><div className="h-4 w-1 bg-blue-500 rounded-full" /><h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500">Data Points</h3></div>
+                                                <div className="flex items-center gap-3"><div className="h-4 w-1 bg-blue-500 rounded-full" /><h3 className="text-[11px] font-black uppercase tracking-wider text-text-muted">Data Points</h3></div>
                                                 <div className="grid grid-cols-2 gap-4">
                                                     {selectedDrawing && TOOL_CONFIGS[selectedDrawing.type].showPrice1 && (
-                                                        <div className="space-y-1.5"><label className="text-[10px] font-bold text-gray-400 uppercase">Price P1</label><input type="number" className="w-full bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-[#363a45] rounded p-2 text-[12px] outline-none" value={selectedDrawing.p1.toFixed(2)} onChange={(e) => updateSelectedDrawing({ p1: parseFloat(e.target.value) })} /></div>
+                                                        <div className="space-y-1.5"><label className="text-[10px] font-bold text-text-muted uppercase">Price P1</label><input type="number" className="w-full bg-input-bg rounded p-2 text-[12px] outline-none focus:ring-2 focus:ring-accent/30" value={selectedDrawing.p1.toFixed(2)} onChange={(e) => updateSelectedDrawing({ p1: parseFloat(e.target.value) })} /></div>
                                                     )}
                                                 </div>
                                             </div>
                                         )}
                                     </div>
-                                    <div className="h-14 border-t border-gray-100 dark:border-[#363a45] flex items-center px-4 justify-end gap-2 bg-gray-50/50 dark:bg-black/10">
-                                        <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-[11px] font-black text-gray-500 uppercase tracking-widest">Discard</button>
+                                    <div className="h-14 flex items-center px-4 justify-end gap-2 bg-surface-hover/50">
+                                        <button onClick={() => setIsSettingsOpen(false)} className="px-4 py-2 text-[11px] font-black text-text-muted uppercase tracking-widest">Discard</button>
                                         <button onClick={() => setIsSettingsOpen(false)} className="px-6 py-2 bg-blue-600 text-white text-[11px] font-black rounded-lg shadow-lg uppercase tracking-widest">Update</button>
                                     </div>
                                 </motion.div>
@@ -468,25 +492,25 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 </div>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
-                <ContextMenu.Content className="min-w-[200px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded shadow-2xl z-50 p-1 animate-in fade-in slide-in-from-right-1">
+                <ContextMenu.Content className="min-w-[200px] bg-surface-elevated rounded-lg shadow-xl z-50 p-1 animate-in fade-in slide-in-from-right-1">
                     <ContextItem label="Reset Viewport" icon={<RotateCcw size={14} />} shortcut="Alt+R" onClick={() => window.location.reload()} />
-                    <ContextMenu.Separator className="h-[1px] bg-gray-100 dark:bg-[#363a45] my-1" />
+                    <ContextMenu.Separator className="h-[1px] bg-surface-hover my-1" />
                     <ContextItem label="Remove Indicators" icon={< EyeOff size={14} />} onClick={() => { }} />
                     <ContextItem label="Remove Drawings" icon={<Trash2 size={14} />} onClick={() => { setDrawings([]); setSelectedId(null); }} />
-                    <ContextMenu.Separator className="h-[1px] bg-gray-100 dark:bg-[#363a45] my-1" />
+                    <ContextMenu.Separator className="h-[1px] bg-surface-hover my-1" />
                     <ContextMenu.Sub>
-                        <ContextMenu.SubTrigger className="flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-[#d1d4dc] hover:bg-blue-600 hover:text-white rounded transition-colors group">
+                        <ContextMenu.SubTrigger className="flex items-center justify-between px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-hover hover:text-foreground rounded transition-colors group">
                             <div className="flex items-center gap-3"><Palette size={14} /><span>Color Theme</span></div>
                             <ChevronRight size={14} className="opacity-40" />
                         </ContextMenu.SubTrigger>
                         <ContextMenu.Portal>
-                            <ContextMenu.SubContent className="min-w-[140px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded shadow-2xl p-1">
-                                <ContextMenu.Item className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-[#d1d4dc] hover:bg-blue-600 hover:text-white rounded flex items-center justify-between cursor-pointer" onClick={() => setTheme('light')}>Light {theme === 'light' && <Check size={14} />}</ContextMenu.Item>
-                                <ContextMenu.Item className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-[#d1d4dc] hover:bg-blue-600 hover:text-white rounded flex items-center justify-between cursor-pointer" onClick={() => setTheme('dark')}>Dark {theme === 'dark' && <Check size={14} />}</ContextMenu.Item>
+                            <ContextMenu.SubContent className="min-w-[140px] bg-surface-elevated rounded-lg shadow-xl p-1">
+                                <ContextMenu.Item className="px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-hover hover:text-foreground rounded flex items-center justify-between cursor-pointer" onClick={() => setTheme('light')}>Light {effectiveTheme === 'light' && <Check size={14} />}</ContextMenu.Item>
+                                <ContextMenu.Item className="px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-hover hover:text-foreground rounded flex items-center justify-between cursor-pointer" onClick={() => setTheme('dark')}>Dark {effectiveTheme === 'dark' && <Check size={14} />}</ContextMenu.Item>
                             </ContextMenu.SubContent>
                         </ContextMenu.Portal>
                     </ContextMenu.Sub>
-                    <ContextMenu.Separator className="h-[1px] bg-gray-100 dark:bg-[#363a45] my-1" />
+                    <ContextMenu.Separator className="h-[1px] bg-surface-hover my-1" />
                     <ContextItem label="Settings..." icon={<Settings size={14} />} shortcut="Ctrl+P" onClick={() => setIsChartSettingsOpen(true)} />
                 </ContextMenu.Content>
             </ContextMenu.Portal>
@@ -495,14 +519,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 };
 
 const ProCheckbox = ({ label, checked, onChange }: { label: string, checked?: boolean, onChange: (v: boolean) => void }) => (
-    <label className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-white/5 rounded-lg cursor-pointer transition-colors group">
-        <span className="text-[12px] font-medium text-gray-600 dark:text-[#b2b5be] group-hover:text-gray-900 dark:group-hover:text-white">{label}</span>
-        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 bg-gray-100 border-gray-300 focus:ring-blue-500" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <label className="flex items-center justify-between p-2 hover:bg-surface-hover rounded-lg cursor-pointer transition-colors group">
+        <span className="text-[12px] font-medium text-text-secondary group-hover:text-foreground">{label}</span>
+        <input type="checkbox" className="w-4 h-4 rounded text-blue-600 bg-input-bg border-border focus:ring-blue-500" checked={checked} onChange={(e) => onChange(e.target.checked)} />
     </label>
 );
 
 const ContextItem = ({ label, icon, shortcut, onClick, className }: { label: string, icon: React.ReactNode, shortcut?: string, onClick: () => void, className?: string }) => (
-    <ContextMenu.Item className={`flex items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 dark:text-[#d1d4dc] hover:bg-blue-600 hover:text-white rounded cursor-pointer outline-none transition-colors group ${className}`} onClick={onClick}>
+    <ContextMenu.Item className={`flex items-center justify-between px-3 py-2 text-sm font-medium text-foreground hover:bg-surface-hover hover:text-foreground rounded cursor-pointer outline-none transition-colors group ${className}`} onClick={onClick}>
         <div className="flex items-center gap-3">{icon}<span>{label}</span></div>
         {shortcut && <span className="text-[10px] font-medium opacity-40 group-hover:opacity-100">{shortcut}</span>}
     </ContextMenu.Item>

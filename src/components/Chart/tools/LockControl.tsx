@@ -13,7 +13,7 @@ interface LockControlProps {
 export const LockControl: React.FC<LockControlProps> = ({ locked, onUpdate }) => (
     <ToolbarTip text={locked ? "Unlock" : "Lock"}>
         <Toolbar.Button
-            className={`p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors ${locked ? 'text-blue-500' : 'text-gray-600 dark:text-gray-300'}`}
+            className={`p-1.5 hover:bg-surface-hover rounded transition-colors ${locked ? 'text-blue-500' : 'text-text-muted hover:text-foreground'}`}
             onClick={() => onUpdate({ locked: !locked })}
         >
             {locked ? <Lock size={16} /> : <Unlock size={16} />}

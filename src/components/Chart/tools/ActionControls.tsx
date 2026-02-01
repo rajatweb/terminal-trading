@@ -16,7 +16,7 @@ export const ActionControls: React.FC<ActionControlsProps> = ({ showSettings, on
         {showSettings && (
             <ToolbarTip text="Settings">
                 <Toolbar.Button
-                    className="p-1.5 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-600 dark:text-gray-300 transition-colors"
+                    className="p-1.5 hover:bg-surface-hover rounded text-text-muted hover:text-foreground transition-colors"
                     onClick={onOpenSettings}
                 >
                     <Settings size={16} />
