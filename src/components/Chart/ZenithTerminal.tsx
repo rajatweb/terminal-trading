@@ -95,6 +95,9 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
 
     useEffect(() => {
         setMounted(true);
+    }, []);
+
+    useEffect(() => {
         if (symbol) setSymbol(symbol);
 
         // Sync positions and option chain if provided

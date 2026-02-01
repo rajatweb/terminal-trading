@@ -26,6 +26,19 @@ export interface Position {
     status: 'ACTIVE' | 'CLOSED';
 }
 
+export interface Order {
+    id: string;
+    symbol: string;
+    type: 'BUY' | 'SELL';
+    instrumentType: 'EQUITY' | 'OPTION' | 'INDEX';
+    product: 'CNC' | 'MIS' | 'NRML';
+    orderType: 'MARKET' | 'LIMIT' | 'SL' | 'SL-M';
+    qty: number;
+    price: number;
+    status: 'PENDING' | 'EXECUTED' | 'REJECTED' | 'CANCELLED';
+    timestamp: number;
+}
+
 export interface OptionStrike {
     strike: number;
     ce: {
@@ -71,5 +84,8 @@ export interface TerminalState {
     watchlists: WatchlistGroup[];
     positions: Position[];
     optionChain: OptionStrike[];
+    orders: Order[];
+    marginAvailable: number;
+    marginUsed: number;
     orderModal: OrderModalState;
 }

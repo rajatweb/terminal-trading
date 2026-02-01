@@ -7,7 +7,7 @@ import { X, AlertTriangle, ShieldCheck, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const OrderModal: React.FC = () => {
-    const { orderModal, closeOrderModal } = useTerminalStore();
+    const { orderModal, closeOrderModal, placeOrder, marginAvailable } = useTerminalStore();
     const { isOpen, symbol, type, instrumentType, price: initialPrice, ltp } = orderModal;
 
     const [product, setProduct] = useState<'CNC' | 'MIS' | 'NRML'>(instrumentType === 'OPTION' ? 'NRML' : 'CNC');
@@ -82,7 +82,7 @@ export const OrderModal: React.FC = () => {
                                             {(instrumentType === 'OPTION' ? ['NRML', 'MIS'] : ['CNC', 'MIS']).map((p) => (
                                                 <button
                                                     key={p}
-                                                    onClick={() => setProduct(p as any)}
+                                                    onClick={() => setProduct(p as 'CNC' | 'MIS' | 'NRML')}
                                                     className={`py-2 rounded-md text-[11px] font-black uppercase transition-all ${product === p
                                                         ? (isSell ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20')
                                                         : 'text-gray-500 hover:text-gray-900 dark:hover:text-[#d1d4dc]'
@@ -132,7 +132,7 @@ export const OrderModal: React.FC = () => {
                                                         name="orderType"
                                                         value={ot}
                                                         checked={orderType === ot}
-                                                        onChange={() => setOrderType(ot as any)}
+                                                        onChange={() => setOrderType(ot as 'MARKET' | 'LIMIT' | 'SL' | 'SL-M')}
                                                         className="hidden"
                                                     />
                                                     <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all ${orderType === ot
@@ -178,7 +178,7 @@ export const OrderModal: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col border-l border-gray-200 dark:border-[#2a2e39] pl-4">
                                         <span className="text-gray-400 uppercase tracking-widest leading-none mb-1">Available</span>
-                                        <span className="text-emerald-500 tabular-nums font-black text-[14px]">₹1,45,200</span>
+                                        <span className="text-emerald-500 tabular-nums font-black text-[14px]">₹{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end">
@@ -191,7 +191,15 @@ export const OrderModal: React.FC = () => {
                             <button
                                 disabled={isIndex}
                                 onClick={() => {
-                                    console.log("Placing order...");
+                                    placeOrder({
+                                        symbol,
+                                        type,
+                                        instrumentType,
+                                        product,
+                                        orderType,
+                                        qty,
+                                        price: orderType === 'MARKET' ? ltp : price,
+                                    });
                                     closeOrderModal();
                                 }}
                                 className={`w-full py-4 rounded-xl text-[14px] font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${isIndex

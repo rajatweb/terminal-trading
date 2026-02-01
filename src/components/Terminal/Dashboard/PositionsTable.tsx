@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 
 export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }) => {
-    const { positions } = useTerminalStore();
+    const { positions, marginAvailable, marginUsed } = useTerminalStore();
     const [activeTab, setActiveTab] = useState('positions');
 
     const totalPnL = positions.reduce((acc, curr) => acc + curr.pnl, 0);
@@ -116,8 +116,8 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
 
             {/* Summary Footer */}
             <div className="h-8 px-4 border-t border-gray-200 dark:border-[#2a2e39] flex items-center gap-6 text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-black/10">
-                <span className="flex items-center gap-1.5"><Wallet size={12} /> Margin Available: <span className="text-[#d1d4dc] tabular-nums">1,45,200.00</span></span>
-                <span className="flex items-center gap-1.5"><Target size={12} /> Margin Used: <span className="text-rose-500 tabular-nums">12,400.00</span></span>
+                <span className="flex items-center gap-1.5"><Wallet size={12} /> Margin Available: <span className="text-[#d1d4dc] tabular-nums">{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
+                <span className="flex items-center gap-1.5"><Target size={12} /> Margin Used: <span className="text-rose-500 tabular-nums">{marginUsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span></span>
                 <div className="flex-1" />
                 <span className="flex items-center gap-1.5 text-blue-500 cursor-pointer hover:underline underline-offset-4 decoration-2"><History size={11} /> View Detailed Order History</span>
             </div>
