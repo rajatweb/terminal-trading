@@ -81,6 +81,12 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const transformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
     const isAutoPricedRef = useRef(true);
     const resizeObserver = useRef<ResizeObserver | null>(null);
+    const dragStateRef = useRef(dragState);
+    const activeToolRef = useRef(activeTool);
+
+    // Sync refs with state/props
+    useEffect(() => { dragStateRef.current = dragState; }, [dragState]);
+    useEffect(() => { activeToolRef.current = activeTool; }, [activeTool]);
 
     const getIntervalStep = () => {
         if (interval === "1m") return 60;
@@ -115,8 +121,6 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const handleDrawingDragStart = (id: number, type: 'point' | 'whole', pointIndex?: 1 | 2, e?: React.MouseEvent) => {
         const drawing = drawings.find(d => d.id === id);
         if (!drawing) return;
-
-        // Prevent dragging if locked
         if (drawing.locked) return;
 
         setDragState({
@@ -128,6 +132,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         });
     };
 
+    // Main Chart Rendering Effect
+    // Removed activeTool and dragState from dependencies to prevent full re-renders on interaction
     useEffect(() => {
         if (!svgRef.current || data.length === 0 || dimensions.width === 0) return;
 
@@ -219,7 +225,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 return !event.ctrlKey && !event.button;
             })
             .on("zoom", (e) => {
-                if (activeTool !== 'cursor' || dragState) return; // Disable zoom while dragging
+                if (activeToolRef.current !== 'cursor' || dragStateRef.current) return; // Disable zoom while dragging
 
                 transformRef.current = e.transform; // Save transform
 
@@ -263,8 +269,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         svg.on("mousemove", (e) => {
             const [mx, my] = d3.pointer(e);
 
+            const currentDragState = dragStateRef.current; // access ref
+
             // Handle Dragging Logic
-            if (dragState) {
+            if (currentDragState) {
                 e.preventDefault();
                 const chartMx = mx - margin.left;
                 const chartMy = my - margin.top;
@@ -275,39 +283,31 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 const price = currentScaleY.invert(chartMy);
 
                 setDrawings(prev => prev.map(d => {
-                    if (d.id !== dragState.drawingId) return d;
+                    if (d.id !== currentDragState.drawingId) return d;
 
-                    if (dragState.type === 'point' && dragState.pointIndex) {
+                    if (currentDragState.type === 'point' && currentDragState.pointIndex) {
                         return {
                             ...d,
-                            [`t${dragState.pointIndex}`]: time,
-                            [`p${dragState.pointIndex}`]: price
+                            [`t${currentDragState.pointIndex}`]: time,
+                            [`p${currentDragState.pointIndex}`]: price
                         };
-                    } else if (dragState.type === 'whole' && dragState.originalDrawing && dragState.startMouse) {
-                        // Delta movement since drag start
-                        // Note: To make 'whole' dragging smoother, we'd ideally project the delta mouse X/Y to delta P/T.
-                        // But precise whole-shape dragging with snapping time axis is tricky.
-                        // Simplified approach: move centroid or p1 to mouse, maintain relative offset
-
-                        // Better calculation:
-                        // Calculate price delta and index delta
-                        const startIdx = Math.round(currentScaleX.invert(dragState.startMouse.x - margin.left));
+                    } else if (currentDragState.type === 'whole' && currentDragState.originalDrawing && currentDragState.startMouse) {
+                        const startIdx = Math.round(currentScaleX.invert(currentDragState.startMouse.x - margin.left));
                         const currentIdx = Math.round(currentScaleX.invert(chartMx));
                         const idxDelta = currentIdx - startIdx;
 
-                        const startPrice = currentScaleY.invert(dragState.startMouse.y - margin.top);
+                        const startPrice = currentScaleY.invert(currentDragState.startMouse.y - margin.top);
                         const priceDelta = price - startPrice;
 
                         const step = getIntervalStep();
-                        const origT1Idx = (parseInt(dragState.originalDrawing.t1) - data[0].time) / step;
+                        const origT1Idx = (parseInt(currentDragState.originalDrawing.t1) - data[0].time) / step;
                         const newT1 = getTimeAtIndex(origT1Idx + idxDelta).toString();
-                        const newP1 = dragState.originalDrawing.p1 + priceDelta;
+                        const newP1 = currentDragState.originalDrawing.p1 + priceDelta;
 
-                        // Same for p2 if exists
-                        if (dragState.originalDrawing.t2 && dragState.originalDrawing.p2 !== undefined) {
-                            const origT2Idx = (parseInt(dragState.originalDrawing.t2) - data[0].time) / step;
+                        if (currentDragState.originalDrawing.t2 && currentDragState.originalDrawing.p2 !== undefined) {
+                            const origT2Idx = (parseInt(currentDragState.originalDrawing.t2) - data[0].time) / step;
                             const newT2 = getTimeAtIndex(origT2Idx + idxDelta).toString();
-                            const newP2 = dragState.originalDrawing.p2 + priceDelta;
+                            const newP2 = currentDragState.originalDrawing.p2 + priceDelta;
 
                             return { ...d, t1: newT1, p1: newP1, t2: newT2, p2: newP2 };
                         }
@@ -332,7 +332,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 yL.attr("y1", cy).attr("y2", cy).attr("x1", 0).attr("x2", chartWidth);
                 const idx = Math.round(currentScaleX.invert(cx));
                 if (data[idx]) setHoveredCandle(data[idx]);
-                if (activeTool !== 'cursor' && drawingPoints.current) setPreviewPoint({ t: getTimeAtIndex(idx).toString(), p: currentScaleY.invert(cy) });
+                if (activeToolRef.current !== 'cursor' && drawingPoints.current) setPreviewPoint({ t: getTimeAtIndex(idx).toString(), p: currentScaleY.invert(cy) });
             } else {
                 crosshair.style("display", "none");
                 setHoveredCandle(null);
@@ -340,42 +340,45 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         });
 
         svg.on("mouseup", () => {
+            // We update state here, which triggers re-render, effectively confirming the drag end
             setDragState(null);
         });
 
         svg.on("mouseleave", () => {
-            // Optional: cancel drag or keep it sticky? usually mouseup handles it.
-            if (dragState) setDragState(null);
+            if (dragStateRef.current) setDragState(null);
             crosshair.style("display", "none");
             setHoveredCandle(null);
         });
 
         svg.on("click", (e) => {
-            if (dragState) return; // Prevent creating new point on drag release
+            if (dragStateRef.current) return;
 
             const [mx, my] = d3.pointer(e);
             const cx = mx - margin.left, cy = my - margin.top;
             const idx = Math.round(currentScaleX.invert(cx));
             const time = getTimeAtIndex(idx).toString(), price = currentScaleY.invert(cy);
 
-            if (activeTool !== 'cursor') {
-                if (activeTool === 'horizontalLine' || activeTool === 'verticalLine') {
-                    setDrawings(p => [...p, { id: Date.now(), type: activeTool as any, t1: time, p1: price, color: theme === 'dark' ? '#b2b5be' : '#2a2e39', width: 2, style: 'solid', locked: false, opacity: 100 }]);
+            const tool = activeToolRef.current;
+
+            if (tool !== 'cursor') {
+                if (tool === 'horizontalLine' || tool === 'verticalLine') {
+                    setDrawings(p => [...p, { id: Date.now(), type: tool as any, t1: time, p1: price, color: theme === 'dark' ? '#b2b5be' : '#2a2e39', width: 2, style: 'solid', locked: false, opacity: 100 }]);
                     onToolComplete?.();
                 } else if (!drawingPoints.current) {
                     drawingPoints.current = { t: time, p: price };
                 } else {
                     const p1 = drawingPoints.current;
                     if (p1) {
+                        // Drawing creation logic using 'tool' variable
                         setDrawings(prev => [...prev, {
                             id: Date.now(),
-                            type: activeTool as any,
+                            type: tool as any,
                             t1: p1.t, p1: p1.p,
                             t2: time, p2: price,
                             color: theme === 'dark' ? '#b2b5be' : '#2a2e39',
                             width: 2, style: 'solid',
                             locked: false, opacity: 100,
-                            fibSettings: activeTool === 'fibonacci' ? {
+                            fibSettings: tool === 'fibonacci' ? {
                                 levels: [
                                     { level: 0, color: '#999999', visible: true },
                                     { level: 0.236, color: '#f44336', visible: true },
@@ -400,7 +403,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
-    }, [data, dimensions, drawings.length, activeTool, theme, colors, chartSettings, dragState]); // Added dragState dependency
+    }, [data, dimensions, drawings.length, theme, colors, chartSettings]); // Removed activeTool & dragState
 
     const updateSelectedDrawing = (updates: Partial<Drawing>) => {
         if (!selectedId) return;
