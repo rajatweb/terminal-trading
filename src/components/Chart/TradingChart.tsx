@@ -134,22 +134,18 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
     // Main Chart Rendering Effect
     // Removed activeTool and dragState from dependencies to prevent full re-renders on interaction
-    const chartGroupRef = useRef<SVGGElement>(null);
-
-    // ... (rest of code)
-
     useEffect(() => {
-        if (!svgRef.current || !chartGroupRef.current || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || data.length === 0 || dimensions.width === 0) return;
 
         const { width, height } = dimensions;
         const margin = { top: 10, right: 65, bottom: 25, left: 10 };
         const chartWidth = width - margin.left - margin.right;
         const chartHeight = height - margin.top - margin.bottom;
 
-        // Select the existing group ref instead of appending to SVG
-        const g = d3.select(chartGroupRef.current);
-        g.selectAll("*").remove(); // Clear previous D3 content inside the group
-        g.attr("transform", `translate(${margin.left},${margin.top})`);
+        const svg = d3.select(svgRef.current);
+        svg.selectAll(".main-g").remove();
+
+        const g = svg.append("g").attr("class", "main-g").attr("transform", `translate(${margin.left},${margin.top})`);
 
         const x = d3.scaleLinear().domain([0, data.length]).range([0, chartWidth]);
         const priceMin = d3.min(data, (d) => d.low) || 0;
@@ -217,8 +213,6 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         let currentScaleX = x;
         let currentScaleY = y;
 
-
-        const svg = d3.select(svgRef.current);
 
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 100])
@@ -474,7 +468,6 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
                     <svg ref={svgRef} width={dimensions.width} height={dimensions.height} className="block">
                         <defs><clipPath id="chart-clip"><rect width={Math.max(0, dimensions.width - 70)} height={Math.max(0, dimensions.height - 40)} /></clipPath></defs>
-                        <g ref={chartGroupRef} />
                         {currentXScale && yScale && (
                             <g transform="translate(10, 10)" clipPath="url(#chart-clip)">
                                 {drawings.map(d => (

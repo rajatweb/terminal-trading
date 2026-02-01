@@ -41,7 +41,7 @@ export default function Home() {
   const [interval, setIntervalVal] = useState("5m");
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSymbolChange = (newSymbol: string) => {
+  const handleSymbolChange = React.useCallback((newSymbol: string) => {
     setIsLoading(true);
     setSymbol(newSymbol);
 
@@ -50,9 +50,9 @@ export default function Home() {
       setData(generateMockData(300, interval));
       setIsLoading(false);
     }, 600);
-  };
+  }, [interval]);
 
-  const handleIntervalChange = (newInterval: string) => {
+  const handleIntervalChange = React.useCallback((newInterval: string) => {
     setIsLoading(true);
     setIntervalVal(newInterval);
 
@@ -61,7 +61,7 @@ export default function Home() {
       setData(generateMockData(300, newInterval));
       setIsLoading(false);
     }, 400);
-  };
+  }, []);
 
   return (
     <ZenithTerminal

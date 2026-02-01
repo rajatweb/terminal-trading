@@ -188,8 +188,10 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
     ];
 
     useEffect(() => {
-        if (onSymbolChange) onSymbolChange(activeSymbol);
-    }, [activeSymbol, onSymbolChange]);
+        if (onSymbolChange && activeSymbol !== symbol) {
+            onSymbolChange(activeSymbol);
+        }
+    }, [activeSymbol, onSymbolChange, symbol]);
 
     if (!mounted) return null;
 
