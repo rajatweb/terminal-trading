@@ -1,36 +1,85 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Terminal Trading App
 
-## Getting Started
+A modern, responsive trading terminal interface built with **Next.js**, **TypeScript**, and **Tailwind CSS**. Features a powerful charting engine using **D3.js** with advanced drawing tools and technical indicators.
 
-First, run the development server:
+![GitHub Actions Workflow Status](https://github.com/rajatweb/terminal-trading/actions/workflows/deploy.yml/badge.svg)
+
+## 🚀 Features
+
+*   **Interactive Charting**: Custom-built candlestick chart using D3.js.
+*   **Drawing Tools**: 
+    *   Trendlines, Rays, Horizontal/Vertical Lines
+    *   Fibonacci Retracements, Price Ranges
+    *   Interactive drag-and-drop and resizing
+*   **Technical Indicators**:
+    *   Moving Averages (EMA, SMA, HMA, VWAP)
+    *   Bollinger Bands, RSI, MACD
+    *   Volume Histogram
+*   **Trading Interface**:
+    *   Simulated Order Placement (Entry, SL, TP)
+    *   Position Management Panel
+    *   Interactive visual order editing on chart
+*   **Responsive Design**: Optimized for different screen sizes with a clean, dark-themed UI.
+
+## 🛠️ Tech Stack
+
+*   **Framework**: [Next.js Double](https://nextjs.org/) (React)
+*   **Language**: TypeScript
+*   **Styling**: Tailwind CSS & Shadcn UI (Radix Primitives)
+*   **Visualization**: D3.js
+*   **Animations**: Framer Motion
+*   **State Management**: Zustand
+*   **Icons**: Lucide React
+
+## 📦 Getting Started
+
+### Prerequisites
+
+*   Node.js 18+ 
+*   npm / yarn / pnpm
+
+### Installation
+
+1.  Clone the repository:
+    ```bash
+    git clone https://github.com/rajatweb/terminal-trading.git
+    cd terminal-trading
+    ```
+
+2.  Install dependencies:
+    ```bash
+    npm install
+    # or
+    yarn install
+    ```
+
+3.  Run the development server:
+    ```bash
+    npm run dev
+    ```
+
+4.  Open [http://localhost:3000](http://localhost:3000) with your browser.
+
+## 🚢 Deployment
+
+This project is configured to deploy automatically to **GitHub Pages** using GitHub Actions.
+
+### How it works
+
+1.  The project uses `next export` configuration (`output: 'export'` in `next.config.ts`) to generate a static HTML/CSS/JS site.
+2.  On every push to the `master` branch, the `.github/workflows/deploy.yml` workflow is triggered.
+3.  It builds the project and deploys the `out` directory to the `gh-pages` environment.
+
+### Manual Build
+
+To build the project locally for production:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+The static output will be in the `out/` directory.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📜 License
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is open source and available under the [MIT License](LICENSE).
