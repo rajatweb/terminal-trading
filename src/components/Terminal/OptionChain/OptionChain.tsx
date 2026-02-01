@@ -32,43 +32,43 @@ export const OptionChain: React.FC = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-white dark:bg-[#131722] border-l border-gray-200 dark:border-[#2a2e39] w-[600px] z-20">
+        <div className="flex flex-col h-full bg-card border-l border-border w-[600px] z-20">
             {/* Header ... */}
-            <div className="h-12 px-4 border-b border-gray-200 dark:border-[#2a2e39] flex items-center justify-between bg-gray-50/50 dark:bg-black/10">
+            <div className="h-12 px-4 border-b border-border flex items-center justify-between bg-muted/30">
                 <div className="flex items-center gap-3">
-                    <span className="text-[12px] font-black text-blue-600 uppercase tracking-tighter">{activeSymbol} Chain</span>
-                    <div className="flex items-center gap-2 px-2 py-1 bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#2a2e39] rounded cursor-pointer group">
-                        <span className="text-[10px] font-bold text-gray-500 group-hover:text-blue-500 transition-colors uppercase">{activeExpiry}</span>
-                        <ChevronDown size={12} className="text-gray-400" />
+                    <span className="text-[12px] font-black text-primary uppercase tracking-tighter">{activeSymbol} Chain</span>
+                    <div className="flex items-center gap-2 px-2 py-1 bg-card border border-border rounded cursor-pointer group">
+                        <span className="text-[10px] font-bold text-muted-foreground group-hover:text-primary transition-colors uppercase">{activeExpiry}</span>
+                        <ChevronDown size={12} className="text-muted-foreground" />
                     </div>
                 </div>
                 <div className="flex items-center gap-2">
-                    <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#2a2e39] rounded text-gray-400 hover:text-blue-500 transition-all"><Filter size={14} /></button>
-                    <button className="p-1.5 hover:bg-gray-100 dark:hover:bg-[#2a2e39] rounded text-gray-400 hover:text-blue-500 transition-all"><RefreshCw size={14} /></button>
+                    <button className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-all"><Filter size={14} /></button>
+                    <button className="p-1.5 hover:bg-muted rounded text-muted-foreground hover:text-primary transition-all"><RefreshCw size={14} /></button>
                 </div>
             </div>
 
             {/* Table Header ... */}
-            <div className="grid grid-cols-11 border-b border-gray-200 dark:border-[#2a2e39] bg-gray-50/30 dark:bg-black/5">
+            <div className="grid grid-cols-11 border-b border-border bg-muted/20">
                 {/* CALLS */}
-                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center py-2 border-r border-gray-100 dark:border-[#2a2e39]/30">
-                    <span className="text-emerald-500 opacity-60">OI</span>
+                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-muted-foreground uppercase tracking-widest text-center py-2 border-r border-border/30">
+                    <span className="text-up opacity-60">OI</span>
                     <span>VOL</span>
                     <span>IV</span>
                     <span>CHG</span>
-                    <span className="text-emerald-500">LTP</span>
+                    <span className="text-up">LTP</span>
                 </div>
                 {/* STRIKE */}
-                <div className="col-span-1 text-[9px] font-black text-blue-500 uppercase tracking-widest text-center py-2 bg-blue-500/5">
+                <div className="col-span-1 text-[9px] font-black text-primary uppercase tracking-widest text-center py-2 bg-primary/5">
                     STRIKE
                 </div>
                 {/* PUTS */}
-                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-gray-400 uppercase tracking-widest text-center py-2 border-l border-gray-100 dark:border-[#2a2e39]/30">
-                    <span className="text-rose-500">LTP</span>
+                <div className="col-span-5 grid grid-cols-5 text-[9px] font-black text-muted-foreground uppercase tracking-widest text-center py-2 border-l border-border/30">
+                    <span className="text-down">LTP</span>
                     <span>CHG</span>
                     <span>IV</span>
                     <span>VOL</span>
-                    <span className="text-rose-500 opacity-60">OI</span>
+                    <span className="text-down opacity-60">OI</span>
                 </div>
             </div>
 
@@ -82,18 +82,18 @@ export const OptionChain: React.FC = () => {
                     return (
                         <div
                             key={s.strike}
-                            className={`grid grid-cols-11 border-b border-gray-100 dark:border-[#2a2e39]/30 hover:bg-gray-50 dark:hover:bg-[#1e222d] transition-colors group ${isATM ? 'ring-1 ring-inset ring-blue-500/30' : ''
+                            className={`grid grid-cols-11 border-b border-border/30 hover:bg-muted/50 transition-colors group ${isATM ? 'ring-1 ring-inset ring-primary/30' : ''
                                 }`}
                         >
                             {/* CE Data */}
-                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-r border-gray-100 dark:border-[#2a2e39]/10 items-center ${isITM_CE ? 'bg-emerald-500/5 dark:bg-emerald-500/5' : ''
+                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-r border-border/10 items-center ${isITM_CE ? 'bg-up/5' : ''
                                 }`}>
                                 <span className="text-center opacity-70 tabular-nums">{s.ce.oi}L</span>
                                 <span className="text-center opacity-70 tabular-nums">{s.ce.volume}k</span>
                                 <span className="text-center opacity-50 tabular-nums">{s.ce.iv}</span>
-                                <span className="text-center text-emerald-500 font-bold tabular-nums">+{s.ce.change}%</span>
+                                <span className="text-center text-up font-bold tabular-nums">+{s.ce.change}%</span>
                                 <div className="relative flex items-center justify-center group/ltp">
-                                    <span className="font-black text-gray-900 dark:text-[#d1d4dc] tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.ce.ltp.toFixed(2)}</span>
+                                    <span className="font-black text-foreground tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.ce.ltp.toFixed(2)}</span>
                                     <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover/ltp:opacity-100 transition-all scale-90 group-hover/ltp:scale-100">
                                         <button
                                             onClick={() => handleOrder('BUY', 'CE', s.strike, s.ce.ltp)}
@@ -108,16 +108,16 @@ export const OptionChain: React.FC = () => {
                             </div>
 
                             {/* Strike */}
-                            <div className={`col-span-1 flex items-center justify-center bg-blue-50/50 dark:bg-blue-500/5 text-[11px] font-black text-blue-600 dark:text-blue-400 tabular-nums ${isATM ? 'bg-blue-600 text-white' : ''
+                            <div className={`col-span-1 flex items-center justify-center bg-primary/5 text-[11px] font-black text-primary tabular-nums ${isATM ? 'bg-primary text-primary-foreground' : ''
                                 }`}>
                                 {s.strike}
                             </div>
 
                             {/* PE Data */}
-                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-l border-gray-100 dark:border-[#2a2e39]/10 items-center ${isITM_PE ? 'bg-rose-500/5 dark:bg-rose-500/5' : ''
+                            <div className={`col-span-5 grid grid-cols-5 text-[11px] font-mono py-1.5 border-l border-border/10 items-center ${isITM_PE ? 'bg-down/5' : ''
                                 }`}>
                                 <div className="relative flex items-center justify-center group/ltp">
-                                    <span className="font-black text-gray-900 dark:text-[#d1d4dc] tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.pe.ltp.toFixed(2)}</span>
+                                    <span className="font-black text-foreground tabular-nums group-hover/ltp:opacity-0 transition-opacity">{s.pe.ltp.toFixed(2)}</span>
                                     <div className="absolute inset-0 flex items-center justify-center gap-1 opacity-0 group-hover/ltp:opacity-100 transition-all scale-90 group-hover/ltp:scale-100">
                                         <button
                                             onClick={() => handleOrder('BUY', 'PE', s.strike, s.pe.ltp)}
@@ -129,7 +129,7 @@ export const OptionChain: React.FC = () => {
                                         >S</button>
                                     </div>
                                 </div>
-                                <span className="text-center text-rose-500 font-bold tabular-nums">{s.pe.change}%</span>
+                                <span className="text-center text-down font-bold tabular-nums">{s.pe.change}%</span>
                                 <span className="text-center opacity-50 tabular-nums">{s.pe.iv}</span>
                                 <span className="text-center opacity-70 tabular-nums">{s.pe.volume}k</span>
                                 <span className="text-center opacity-70 tabular-nums">{s.pe.oi}L</span>
@@ -140,12 +140,12 @@ export const OptionChain: React.FC = () => {
             </div>
 
             {/* Bottom Meta */}
-            <div className="h-10 px-4 border-t border-gray-200 dark:border-[#2a2e39] flex items-center justify-between text-[10px] font-bold text-gray-500 uppercase bg-gray-50/50 dark:bg-black/10">
+            <div className="h-10 px-4 border-t border-border flex items-center justify-between text-[10px] font-bold text-muted-foreground uppercase bg-muted/30">
                 <div className="flex items-center gap-4">
-                    <span className="flex items-center gap-1.5"><Info size={12} className="text-blue-500" /> Greeks Calibrated</span>
+                    <span className="flex items-center gap-1.5"><Info size={12} className="text-primary" /> Greeks Calibrated</span>
                     <span className="flex items-center gap-1.5"><Layers size={12} /> Straddle: 1540.20</span>
                 </div>
-                <button className="flex items-center gap-1 text-blue-600 hover:text-blue-700 font-black"><Maximize2 size={12} /> Full Chart</button>
+                <button className="flex items-center gap-1 text-primary hover:text-primary/80 font-black"><Maximize2 size={12} /> Full Chart</button>
             </div>
         </div>
     );

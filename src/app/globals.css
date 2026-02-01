@@ -1,71 +1,130 @@
 @import "tailwindcss";
 
+@theme {
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-up: var(--up);
+  --color-down: var(--down);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Vibrant Light Mode */
+  --background: #f1f3f6;
+  --foreground: #131722;
+  
+  --card: #ffffff;
+  --card-foreground: #131722;
+  
+  --popover: #ffffff;
+  --popover-foreground: #131722;
+  
+  --primary: #2962ff;
+  --primary-foreground: #ffffff;
+  
+  --secondary: #eef2f5;
+  --secondary-foreground: #131722;
+  
+  --muted: #e0e3eb;
+  --muted-foreground: #6a6d78;
+  
+  --accent: #eff2f5;
+  --accent-foreground: #131722;
+  
+  --destructive: #ef5350;
+  --destructive-foreground: #ffffff;
+
+  --border: #e0e3eb;
+  --input: #e0e3eb;
+  --ring: #2962ff;
+
+  --radius: 0.5rem;
+
+  /* Trading Specific */
+  --up: #00897b;
+  --down: #ef5350;
 }
 
 .dark {
+  /* Deep Blue/Gray Dark Mode (TradingView Style) */
   --background: #131722;
-  --foreground: #ededed;
+  --foreground: #d1d4dc;
+  
+  --card: #1e222d;
+  --card-foreground: #d1d4dc;
+  
+  --popover: #1e222d;
+  --popover-foreground: #d1d4dc;
+  
+  --primary: #2962ff;
+  --primary-foreground: #ffffff;
+  
+  --secondary: #2a2e39;
+  --secondary-foreground: #d1d4dc;
+  
+  --muted: #2a2e39;
+  --muted-foreground: #787b86;
+  
+  --accent: #2a2e39;
+  --accent-foreground: #d1d4dc;
+  
+  --destructive: #f23645;
+  --destructive-foreground: #ffffff;
+  
+  --border: #2a2e39;
+  --input: #2a2e39;
+  --ring: #1e222d;
+
+  /* Trading Specific */
+  --up: #00bfa5;
+  --down: #f23645;
 }
 
 body {
+  background-color: var(--background);
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   overflow: hidden;
 }
 
-/* Custom Scrollbar for Dark Theme */
-.dark ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-.dark ::-webkit-scrollbar-track {
-  background: #1e222d;
-}
-.dark ::-webkit-scrollbar-thumb {
-  background: #2a2e39;
-  border-radius: 3px;
-}
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #363a45;
-}
-
-/* Custom Scrollbar for Light Theme */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f1f1;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #ccc;
+  background: var(--muted-foreground);
+  opacity: 0.5;
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #bbb;
+  background: var(--foreground);
 }
 
-/* Animations */
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.animate-fade-in {
-  animation: fadeIn 0.3s ease-in-out;
-}
-
-/* Glassmorphism utility using standard CSS to avoid Tailwind v4 apply issues */
+/* Glassmorphism */
 .glass {
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
-  background-color: rgba(255, 255, 255, 0.7);
+  background-color: color-mix(in srgb, var(--card) 70%, transparent);
+  border: 1px solid color-mix(in srgb, var(--border) 50%, transparent);
 }
 
-.dark .glass {
-  background-color: rgba(30, 34, 45, 0.8);
-}

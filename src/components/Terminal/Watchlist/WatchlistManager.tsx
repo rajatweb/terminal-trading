@@ -13,25 +13,25 @@ export const WatchlistManager: React.FC = () => {
     const [isMenuOpen, setIsMenuOpen] = useState(false);
 
     return (
-        <aside className="w-80 h-full border-l border-gray-200 dark:border-[#2a2e39] bg-white dark:bg-[#131722] flex flex-col z-20">
+        <aside className="w-80 h-full border-l border-border bg-card flex flex-col z-20">
             {/* Header & Switcher */}
-            <div className="h-12 px-4 border-b border-gray-100 dark:border-[#2a2e39] flex items-center justify-between bg-gray-50/50 dark:bg-black/10">
+            <div className="h-12 px-4 border-b border-border flex items-center justify-between bg-muted/30">
                 <div
                     className="flex items-center gap-2 cursor-pointer group"
                     onClick={() => setIsMenuOpen(!isMenuOpen)}
                 >
                     <Globe size={14} className="text-blue-500" />
-                    <span className="text-[11px] font-black text-gray-500 dark:text-[#b2b5be] uppercase tracking-wider group-hover:text-blue-500 transition-colors">
+                    <span className="text-[11px] font-black text-muted-foreground uppercase tracking-wider group-hover:text-primary transition-colors">
                         {activeGroup.name}
                     </span>
-                    <ChevronDown size={14} className="text-gray-400" />
+                    <ChevronDown size={14} className="text-muted-foreground" />
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <button className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2a2e39] rounded transition-colors">
-                        <Plus size={14} className="text-gray-500" />
+                    <button className="p-1.5 hover:bg-muted rounded transition-colors">
+                        <Plus size={14} className="text-muted-foreground" />
                     </button>
-                    <button className="p-1.5 hover:bg-gray-200 dark:hover:bg-[#2a2e39] rounded transition-colors text-gray-500">
+                    <button className="p-1.5 hover:bg-muted rounded transition-colors text-muted-foreground">
                         <Search size={14} />
                     </button>
                 </div>
@@ -39,11 +39,11 @@ export const WatchlistManager: React.FC = () => {
 
             {/* Watchlist Switcher Dropdown (Conditional) */}
             {isMenuOpen && (
-                <div className="absolute top-12 right-0 w-80 bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#2a2e39] shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-top-2">
+                <div className="absolute top-12 right-0 w-80 bg-popover border border-border shadow-2xl z-50 p-2 animate-in fade-in slide-in-from-top-2">
                     {watchlists.map(w => (
                         <div
                             key={w.id}
-                            className={`px-3 py-2.5 rounded-md cursor-pointer flex items-center justify-between group transition-all ${w.id === activeWatchlistId ? 'bg-blue-600 text-white' : 'hover:bg-gray-100 dark:hover:bg-[#2a2e39]'
+                            className={`px-3 py-2.5 rounded-md cursor-pointer flex items-center justify-between group transition-all ${w.id === activeWatchlistId ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'
                                 }`}
                             onClick={() => {
                                 setActiveWatchlist(w.id);
@@ -54,8 +54,8 @@ export const WatchlistManager: React.FC = () => {
                             <span className="text-[10px] opacity-60 font-black">{w.items.length} SAMPLES</span>
                         </div>
                     ))}
-                    <div className="mt-2 pt-2 border-t border-gray-100 dark:border-[#2a2e39]">
-                        <button className="w-full px-3 py-2 text-[11px] font-black text-blue-500 hover:bg-blue-500/10 rounded transition-all text-left uppercase">
+                    <div className="mt-2 pt-2 border-t border-border">
+                        <button className="w-full px-3 py-2 text-[11px] font-black text-primary hover:bg-primary/10 rounded transition-all text-left uppercase">
                             Create New List +
                         </button>
                     </div>
@@ -63,7 +63,7 @@ export const WatchlistManager: React.FC = () => {
             )}
 
             {/* Column Headers */}
-            <div className="grid grid-cols-12 px-4 py-3 text-[10px] font-black text-gray-400 dark:text-[#787b86] uppercase tracking-tighter border-b border-gray-100 dark:border-[#2a2e39] bg-gray-50/20 dark:bg-black/5">
+            <div className="grid grid-cols-12 px-4 py-3 text-[10px] font-black text-muted-foreground uppercase tracking-tighter border-b border-border bg-muted/20">
                 <span className="col-span-6">Symbol</span>
                 <span className="col-span-3 text-right">LTP / VOL</span>
                 <span className="col-span-3 text-right">CHG%</span>
@@ -74,29 +74,29 @@ export const WatchlistManager: React.FC = () => {
                 {activeGroup.items.map((item) => (
                     <div
                         key={item.symbol}
-                        className={`px-4 py-3 border-b border-transparent hover:border-blue-500/20 hover:bg-gray-50 dark:hover:bg-[#1e222d] cursor-pointer flex justify-between items-center transition-all group relative ${activeSymbol === item.symbol ? 'bg-blue-500/5 border-l-2 border-l-blue-500' : ''
+                        className={`px-4 py-3 border-b border-transparent hover:border-primary/20 hover:bg-muted cursor-pointer flex justify-between items-center transition-all group relative ${activeSymbol === item.symbol ? 'bg-primary/5 border-l-2 border-l-primary' : ''
                             }`}
                         onClick={() => setSymbol(item.symbol)}
                     >
                         <div className="flex flex-col">
-                            <span className={`text-[12px] font-bold tracking-tight transition-colors ${activeSymbol === item.symbol ? 'text-blue-500' : 'text-gray-900 dark:text-[#d1d4dc] group-hover:text-blue-500'
+                            <span className={`text-[12px] font-bold tracking-tight transition-colors ${activeSymbol === item.symbol ? 'text-primary' : 'text-foreground group-hover:text-primary'
                                 }`}>
                                 {item.symbol}
                             </span>
-                            <span className="text-[9px] font-bold text-gray-400 group-hover:text-gray-500 dark:group-hover:text-gray-300 transition-colors uppercase">
+                            <span className="text-[9px] font-bold text-muted-foreground group-hover:text-foreground transition-colors uppercase">
                                 {item.exchange} • {item.description || "EQUITY"}
                             </span>
                         </div>
 
                         <div className="flex flex-col items-end">
-                            <span className="text-[13px] font-black font-mono text-gray-900 dark:text-[#d1d4dc] tabular-nums">
+                            <span className="text-[13px] font-black font-mono text-foreground tabular-nums">
                                 {item.price.toFixed(2)}
                             </span>
                             <div className="flex items-center gap-1.5">
-                                <span className={`text-[10px] font-black ${item.isUp ? "text-emerald-500" : "text-rose-500"}`}>
+                                <span className={`text-[10px] font-black ${item.isUp ? "text-up" : "text-down"}`}>
                                     {item.isUp ? "+" : ""}{item.change.toFixed(2)}
                                 </span>
-                                <span className={`text-[10px] font-black px-1 rounded-sm ${item.isUp ? "bg-emerald-500/10 text-emerald-500" : "bg-rose-500/10 text-rose-500"
+                                <span className={`text-[10px] font-black px-1 rounded-sm ${item.isUp ? "bg-up/10 text-up" : "bg-down/10 text-down"
                                     }`}>
                                     {item.changePercent.toFixed(2)}%
                                 </span>
@@ -104,7 +104,7 @@ export const WatchlistManager: React.FC = () => {
                         </div>
 
                         {/* Hover Quick Actions */}
-                        <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-white dark:bg-[#1e222d] pl-2 z-10 shadow-[-10px_0_10px_rgba(255,255,255,1)] dark:shadow-[-10px_0_10px_rgba(30,34,45,1)]">
+                        <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity flex items-center gap-1 bg-card pl-2 z-10 shadow-[-10px_0_10px_rgba(255,255,255,0.8)] dark:shadow-[-10px_0_10px_rgba(30,34,45,0.8)]">
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -138,12 +138,12 @@ export const WatchlistManager: React.FC = () => {
             </div>
 
             {/* Sidebar Ad */}
-            <div className="px-3 py-3 border-t border-gray-100 dark:border-[#2a2e39]">
+            <div className="px-3 py-3 border-t border-border">
                 <SidebarAd dismissible={true} />
             </div>
 
             {/* Footer Stat Bar */}
-            <div className="h-8 px-4 border-t border-gray-100 dark:border-[#2a2e39] flex items-center justify-between text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50/50 dark:bg-black/10">
+            <div className="h-8 px-4 border-t border-border flex items-center justify-between text-[9px] font-black text-muted-foreground uppercase tracking-widest bg-muted/30">
                 <span>{activeGroup.items.length} Symbols Selected</span>
                 <span className="text-blue-500 animate-pulse">Live</span>
             </div>

@@ -29,7 +29,7 @@ export const OrderModal: React.FC = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
                         onClick={closeOrderModal}
-                        className="absolute inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm pointer-events-auto"
+                        className="absolute inset-0 bg-background/60 backdrop-blur-sm pointer-events-auto"
                     />
 
                     {/* Modal Content */}
@@ -40,23 +40,23 @@ export const OrderModal: React.FC = () => {
                         initial={{ scale: 0.95, opacity: 0, y: 10 }}
                         animate={{ scale: 1, opacity: 1, y: 0 }}
                         exit={{ scale: 0.95, opacity: 0, y: 10 }}
-                        className="w-[420px] bg-white dark:bg-[#1e222d] rounded-2xl shadow-[0_32px_64px_-16px_rgba(0,0,0,0.5)] border border-gray-200 dark:border-[#363a45] overflow-hidden pointer-events-auto relative z-10"
+                        className="w-[420px] bg-card rounded-2xl shadow-xl border border-border overflow-hidden pointer-events-auto relative z-10"
                     >
                         {/* Header with NSE Branding */}
-                        <div className={`px-4 py-3 flex items-center justify-between border-b border-gray-100 dark:border-[#2a2e39] cursor-grab active:cursor-grabbing ${isSell ? 'bg-rose-500/10' : 'bg-blue-500/10'
+                        <div className={`px-4 py-3 flex items-center justify-between border-b border-border cursor-grab active:cursor-grabbing ${isSell ? 'bg-destructive/10' : 'bg-primary/10'
                             }`}>
                             <div className="flex flex-col">
                                 <div className="flex items-center gap-2">
-                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black text-white uppercase ${isSell ? 'bg-rose-600' : 'bg-blue-600'
+                                    <span className={`px-1.5 py-0.5 rounded text-[10px] font-black text-white uppercase ${isSell ? 'bg-destructive' : 'bg-primary'
                                         }`}>{type}</span>
-                                    <span className="text-[14px] font-black text-gray-900 dark:text-[#d1d4dc] uppercase tracking-tight">{symbol}</span>
-                                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none">NSE • {instrumentType}</span>
+                                    <span className="text-[14px] font-black text-foreground uppercase tracking-tight">{symbol}</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-none">NSE • {instrumentType}</span>
                                 </div>
                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                    <span className="text-[11px] font-bold text-gray-500 tabular-nums">LTP: {ltp.toFixed(2)}</span>
+                                    <span className="text-[11px] font-bold text-muted-foreground tabular-nums">LTP: {ltp.toFixed(2)}</span>
                                 </div>
                             </div>
-                            <button onClick={closeOrderModal} className="p-1.5 hover:bg-black/10 rounded-full transition-colors text-gray-500">
+                            <button onClick={closeOrderModal} className="p-1.5 hover:bg-black/10 rounded-full transition-colors text-muted-foreground">
                                 <X size={18} />
                             </button>
                         </div>
@@ -77,15 +77,15 @@ export const OrderModal: React.FC = () => {
                                 <>
                                     {/* Product Toggle */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Product Type</label>
-                                        <div className="grid grid-cols-2 gap-2 bg-gray-50 dark:bg-black/20 p-1 rounded-lg border border-gray-100 dark:border-[#2a2e39]">
+                                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Product Type</label>
+                                        <div className="grid grid-cols-2 gap-2 bg-muted/30 p-1 rounded-lg border border-border">
                                             {(instrumentType === 'OPTION' ? ['NRML', 'MIS'] : ['CNC', 'MIS']).map((p) => (
                                                 <button
                                                     key={p}
                                                     onClick={() => setProduct(p as 'CNC' | 'MIS' | 'NRML')}
                                                     className={`py-2 rounded-md text-[11px] font-black uppercase transition-all ${product === p
-                                                        ? (isSell ? 'bg-rose-600 text-white shadow-lg shadow-rose-500/20' : 'bg-blue-600 text-white shadow-lg shadow-blue-500/20')
-                                                        : 'text-gray-500 hover:text-gray-900 dark:hover:text-[#d1d4dc]'
+                                                        ? (isSell ? 'bg-destructive text-destructive-foreground shadow-lg' : 'bg-primary text-primary-foreground shadow-lg')
+                                                        : 'text-muted-foreground hover:text-foreground'
                                                         }`}
                                                 >
                                                     {p === 'CNC' ? 'Cash & Carry' : p === 'MIS' ? 'Intraday (MIS)' : 'Normal (NRML)'}
@@ -97,25 +97,25 @@ export const OrderModal: React.FC = () => {
                                     {/* Qty and Price Grid */}
                                     <div className="grid grid-cols-2 gap-4">
                                         <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Quantity</label>
+                                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Quantity</label>
                                             <input
                                                 type="number"
                                                 value={qty}
                                                 onChange={(e) => setQty(Number(e.target.value))}
-                                                className="w-full bg-gray-50 dark:bg-[#131722] border border-gray-200 dark:border-[#2a2e39] rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-mono"
+                                                className="w-full bg-background border border-border rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-mono"
                                             />
                                             {instrumentType === 'OPTION' && (
-                                                <span className="text-[9px] font-bold text-gray-400 uppercase tracking-widest pl-1">Lot Size: 50</span>
+                                                <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest pl-1">Lot Size: 50</span>
                                             )}
                                         </div>
                                         <div className="flex flex-col gap-2">
-                                            <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Price</label>
+                                            <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Price</label>
                                             <input
                                                 type="number"
                                                 disabled={orderType === 'MARKET'}
                                                 value={orderType === 'MARKET' ? ltp : price}
                                                 onChange={(e) => setPrice(Number(e.target.value))}
-                                                className={`w-full bg-gray-50 dark:bg-[#131722] border border-gray-200 dark:border-[#2a2e39] rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all font-mono ${orderType === 'MARKET' ? 'opacity-50 cursor-not-allowed' : ''
+                                                className={`w-full bg-background border border-border rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-primary/20 transition-all font-mono ${orderType === 'MARKET' ? 'opacity-50 cursor-not-allowed' : ''
                                                     }`}
                                             />
                                         </div>
@@ -123,8 +123,8 @@ export const OrderModal: React.FC = () => {
 
                                     {/* Order Type Toggle */}
                                     <div className="flex flex-col gap-2">
-                                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest pl-1">Order Type</label>
-                                        <div className="flex items-center gap-4 bg-gray-50 dark:bg-black/20 px-4 py-2 rounded-lg border border-gray-100 dark:border-[#2a2e39]">
+                                        <label className="text-[10px] font-black text-muted-foreground uppercase tracking-widest pl-1">Order Type</label>
+                                        <div className="flex items-center gap-4 bg-muted/30 px-4 py-2 rounded-lg border border-border">
                                             {['MARKET', 'LIMIT', 'SL', 'SL-M'].map((ot) => (
                                                 <label key={ot} className="flex items-center gap-2 cursor-pointer group">
                                                     <input
@@ -136,12 +136,12 @@ export const OrderModal: React.FC = () => {
                                                         className="hidden"
                                                     />
                                                     <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center transition-all ${orderType === ot
-                                                        ? (isSell ? 'border-rose-600 bg-rose-600' : 'border-blue-600 bg-blue-600')
-                                                        : 'border-gray-300 dark:border-[#363a45] group-hover:border-gray-400'
+                                                        ? (isSell ? 'border-destructive bg-destructive' : 'border-primary bg-primary')
+                                                        : 'border-muted-foreground group-hover:border-foreground'
                                                         }`}>
                                                         {orderType === ot && <div className="w-1.5 h-1.5 rounded-full bg-white shadow-sm" />}
                                                     </div>
-                                                    <span className={`text-[11px] font-black uppercase tracking-tight ${orderType === ot ? 'text-gray-900 dark:text-[#d1d4dc]' : 'text-gray-400'
+                                                    <span className={`text-[11px] font-black uppercase tracking-tight ${orderType === ot ? 'text-foreground' : 'text-muted-foreground'
                                                         }`}>{ot}</span>
                                                 </label>
                                             ))}
@@ -155,12 +155,12 @@ export const OrderModal: React.FC = () => {
                                             animate={{ height: 'auto', opacity: 1 }}
                                             className="flex flex-col gap-2 overflow-hidden"
                                         >
-                                            <label className="text-[10px] font-black text-rose-500 uppercase tracking-widest pl-1">Trigger Price</label>
+                                            <label className="text-[10px] font-black text-destructive uppercase tracking-widest pl-1">Trigger Price</label>
                                             <input
                                                 type="number"
                                                 value={triggerPrice}
                                                 onChange={(e) => setTriggerPrice(Number(e.target.value))}
-                                                className="w-full bg-rose-500/5 dark:bg-rose-500/5 border border-rose-500/20 rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-rose-500/20 transition-all text-rose-500 font-mono"
+                                                className="w-full bg-destructive/5 border border-destructive/20 rounded-lg px-4 py-2.5 text-[14px] font-black tabular-nums focus:outline-none focus:ring-2 focus:ring-destructive/20 transition-all text-destructive font-mono"
                                             />
                                         </motion.div>
                                     )}
@@ -169,20 +169,20 @@ export const OrderModal: React.FC = () => {
                         </div>
 
                         {/* Summary Footer */}
-                        <div className="bg-gray-50 dark:bg-black/20 p-5 space-y-4 border-t border-gray-100 dark:border-[#2a2e39]">
+                        <div className="bg-muted/20 p-5 space-y-4 border-t border-border">
                             <div className="flex items-center justify-between text-[11px] font-bold">
                                 <div className="flex items-center gap-4">
                                     <div className="flex flex-col">
-                                        <span className="text-gray-400 uppercase tracking-widest leading-none mb-1">Margin Req.</span>
-                                        <span className="text-gray-900 dark:text-[#d1d4dc] tabular-nums font-black text-[14px]">₹{(qty * (orderType === 'MARKET' ? ltp : price)).toFixed(2)}</span>
+                                        <span className="text-muted-foreground uppercase tracking-widest leading-none mb-1">Margin Req.</span>
+                                        <span className="text-foreground tabular-nums font-black text-[14px]">₹{(qty * (orderType === 'MARKET' ? ltp : price)).toFixed(2)}</span>
                                     </div>
-                                    <div className="flex flex-col border-l border-gray-200 dark:border-[#2a2e39] pl-4">
-                                        <span className="text-gray-400 uppercase tracking-widest leading-none mb-1">Available</span>
-                                        <span className="text-emerald-500 tabular-nums font-black text-[14px]">₹{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                    <div className="flex flex-col border-l border-border pl-4">
+                                        <span className="text-muted-foreground uppercase tracking-widest leading-none mb-1">Available</span>
+                                        <span className="text-up tabular-nums font-black text-[14px]">₹{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end">
-                                    <div className="flex items-center gap-1.5 p-1 px-2 rounded bg-emerald-500/10 text-emerald-500 text-[9px] font-black uppercase tracking-tighter">
+                                    <div className="flex items-center gap-1.5 p-1 px-2 rounded bg-up/10 text-up text-[9px] font-black uppercase tracking-tighter">
                                         <ShieldCheck size={12} /> Institutional Execution
                                     </div>
                                 </div>
@@ -203,17 +203,17 @@ export const OrderModal: React.FC = () => {
                                     closeOrderModal();
                                 }}
                                 className={`w-full py-4 rounded-xl text-[14px] font-black uppercase tracking-widest shadow-xl transition-all active:scale-95 flex items-center justify-center gap-2 ${isIndex
-                                    ? 'bg-gray-200 dark:bg-[#363a45] text-gray-400 cursor-not-allowed'
+                                    ? 'bg-muted text-muted-foreground cursor-not-allowed'
                                     : (isSell
-                                        ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/20'
-                                        : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-600/20')
+                                        ? 'bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-destructive/20'
+                                        : 'bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20')
                                     }`}
                             >
                                 <Zap size={18} fill="currentColor" />
                                 {isIndex ? 'Market Restricted' : `${type} ${symbol}`}
                             </button>
 
-                            <p className="text-[10px] text-gray-400 text-center font-bold tracking-tight opacity-60">
+                            <p className="text-[10px] text-muted-foreground text-center font-bold tracking-tight opacity-60">
                                 Orders are executed via NSE Exchange. MIS squared off by 3:20 PM.
                             </p>
                         </div>
