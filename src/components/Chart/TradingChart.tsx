@@ -78,6 +78,8 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         originalDrawing?: Drawing
     } | null>(null);
 
+    const transformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
+    const isAutoPricedRef = useRef(true);
     const resizeObserver = useRef<ResizeObserver | null>(null);
 
     const getIntervalStep = () => {
@@ -200,13 +202,11 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             xAxisGroup.selectAll(".tick text").attr("fill", colors.text).attr("font-size", "11px");
         };
 
-        drawCandles(x, y);
-        updateAxes(x, y);
-        updateGrid(x, y);
+        // MOVED INITIAL DRAW TO AFTER ZOOM SETUP TO HANDLE RESTORE LOGIC
 
         let currentScaleX = x;
         let currentScaleY = y;
-        let isAutoPriced = true;
+
 
         const zoom = d3.zoom<SVGSVGElement, unknown>()
             .scaleExtent([0.1, 100])
@@ -220,9 +220,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             })
             .on("zoom", (e) => {
                 if (activeTool !== 'cursor' || dragState) return; // Disable zoom while dragging
-                currentScaleX = x.copy().domain([0, data.length].map(d => e.transform.invertX(x(d))));
+
+                transformRef.current = e.transform; // Save transform
+
+                currentScaleX = e.transform.rescaleX(x);
                 setCurrentXScale(() => currentScaleX);
-                if (isAutoPriced) {
+
+                currentScaleY = y;
+                if (isAutoPricedRef.current) {
                     const [s, ed] = currentScaleX.domain();
                     const visible = data.filter((_, i) => i >= s && i <= ed);
                     if (visible.length > 0) {
@@ -232,12 +237,24 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         currentScaleY.domain([minP - pad, maxP + pad]);
                     }
                 }
+                setYScale(() => currentScaleY);
+
                 drawCandles(currentScaleX, currentScaleY);
                 updateAxes(currentScaleX, currentScaleY);
                 updateGrid(currentScaleX, currentScaleY);
             });
 
         svg.call(zoom as any);
+
+        // Restore previous zoom state
+        if (transformRef.current !== d3.zoomIdentity) {
+            svg.call(zoom.transform, transformRef.current);
+        } else {
+            // Initial draw if no zoom state
+            drawCandles(x, y);
+            updateAxes(x, y);
+            updateGrid(x, y);
+        }
 
         const crosshair = g.append("g").style("display", "none").style("pointer-events", "none");
         const xL = crosshair.append("line").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
