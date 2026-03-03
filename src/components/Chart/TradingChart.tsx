@@ -27,7 +27,12 @@ import {
     Ruler,
     Layers,
     ChevronDown,
-    Activity
+    Activity,
+    Scissors,
+    ShoppingCart,
+    ArrowUpRight,
+    ArrowDownRight,
+    History
 } from "lucide-react";
 import DrawingToolbar from "./DrawingToolbar";
 import { DrawingRenderer } from "./drawings/DrawingRenderer";
@@ -36,6 +41,7 @@ import { ChartSettingsModal } from "./ChartSettingsModal";
 import { useTradingStore } from "@/stores/tradingStore";
 import { WatchlistItem as TradingWatchlistItem } from "@/types/terminal";
 import { getSymbolConfig } from "@/lib/dhan/symbols";
+import { ReplayToolbar } from "./ReplayToolbar";
 
 interface TradingChartProps {
     data: OHLCV[];
@@ -82,6 +88,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
     const [hoveredCandle, setHoveredCandle] = useState<OHLCV | null>(null);
 
+    // Replay State
+    const [isReplayActive, setIsReplayActive] = useState(false);
+    const [replayIndex, setReplayIndex] = useState(-1);
+    const [isReplayPlaying, setIsReplayPlaying] = useState(false);
+    const [replaySpeed, setReplaySpeed] = useState(1000); // 1s per candle
+    const [isReplayCutMode, setIsReplayCutMode] = useState(false);
+    const [replayOrders, setReplayOrders] = useState<{ id: string, type: 'BUY' | 'SELL', price: number, time: number, qty: number, index: number }[]>([]);
+    const [replayPosition, setReplayPosition] = useState<{ qty: number, avgPrice: number } | null>(null);
+    const [isReplayReportOpen, setIsReplayReportOpen] = useState(false);
+
     const { theme, setTheme } = useTheme();
 
     const chartSettings = storeChartSettings;
@@ -94,12 +110,125 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     useEffect(() => {
         if (data) {
             setCandles(data);
+            // Reset replay on data change
+            setIsReplayActive(false);
+            setReplayIndex(-1);
+            setIsReplayPlaying(false);
         }
     }, [data]);
 
-    // Handle Real-time Updates
+    // Replay Timer
     useEffect(() => {
-        if (!latestQuote || !symbol || candles.length === 0) return;
+        let timer: any;
+        if (isReplayActive && isReplayPlaying) {
+            timer = setInterval(() => {
+                setReplayIndex(prev => {
+                    if (prev < candles.length - 1) return prev + 1;
+                    setIsReplayPlaying(false);
+                    return prev;
+                });
+            }, replaySpeed);
+        }
+        return () => clearInterval(timer);
+    }, [isReplayActive, isReplayPlaying, replaySpeed, candles.length]);
+
+    // Use derived candles for drawing
+    const displayCandles = useMemo(() => {
+        if (isReplayCutMode) {
+            return candles;
+        }
+        if (isReplayActive && replayIndex !== -1) {
+            return candles.slice(0, replayIndex + 1);
+        }
+        return candles;
+    }, [candles, isReplayActive, replayIndex, isReplayCutMode]);
+
+    // Replay Trading Helpers
+    const handleReplayTrade = (type: 'BUY' | 'SELL') => {
+        if (!isReplayActive || replayIndex === -1) return;
+        const candle = candles[replayIndex];
+        const price = candle.close;
+        const time = candle.time;
+        const qty = 1; // Default 1 unit for replay practice
+
+        const newOrder = {
+            id: `REPLAY_${Date.now()}`,
+            type,
+            price,
+            time,
+            qty,
+            index: replayIndex
+        };
+
+        setReplayOrders(prev => [...prev, newOrder]);
+
+        setReplayPosition(prev => {
+            if (!prev) return { qty: type === 'BUY' ? qty : -qty, avgPrice: price };
+
+            const currentUnits = prev.qty;
+            const newUnits = type === 'BUY' ? currentUnits + qty : currentUnits - qty;
+
+            if (newUnits === 0) return null;
+
+            // Simple avg price for adding to position
+            let newAvg = prev.avgPrice;
+            if ((type === 'BUY' && currentUnits > 0) || (type === 'SELL' && currentUnits < 0)) {
+                newAvg = ((prev.avgPrice * Math.abs(currentUnits)) + (price * qty)) / Math.abs(newUnits);
+            }
+
+            return { qty: newUnits, avgPrice: newAvg };
+        });
+    };
+
+    const processReplayTrades = () => {
+        const trades: { entry: number, exit: number, side: 'LONG' | 'SHORT', pnl: number, qty: number, entryTime: number, exitTime: number }[] = [];
+        let tempPos: { price: number, qty: number, side: 'LONG' | 'SHORT', time: number } | null = null;
+
+        replayOrders.forEach(o => {
+            if (!tempPos) {
+                tempPos = { price: o.price, qty: o.qty, side: o.type === 'BUY' ? 'LONG' : 'SHORT', time: o.time };
+            } else {
+                if (tempPos.side === (o.type === 'BUY' ? 'LONG' : 'SHORT')) {
+                    tempPos.price = ((tempPos.price * tempPos.qty) + (o.price * o.qty)) / (tempPos.qty + o.qty);
+                    tempPos.qty += o.qty;
+                } else {
+                    const closedQty = Math.min(tempPos.qty, o.qty);
+                    const pnl = tempPos.side === 'LONG' ? (o.price - tempPos.price) * closedQty : (tempPos.price - o.price) * closedQty;
+
+                    trades.push({
+                        entry: tempPos.price,
+                        exit: o.price,
+                        side: tempPos.side,
+                        pnl,
+                        qty: closedQty,
+                        entryTime: tempPos.time,
+                        exitTime: o.time
+                    });
+
+                    if (tempPos.qty > o.qty) {
+                        tempPos.qty -= o.qty;
+                    } else if (tempPos.qty < o.qty) {
+                        tempPos = { price: o.price, qty: o.qty - tempPos.qty, side: o.type === 'BUY' ? 'LONG' : 'SHORT', time: o.time };
+                    } else {
+                        tempPos = null;
+                    }
+                }
+            }
+        });
+
+        const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
+        const wins = trades.filter(t => t.pnl > 0);
+        const losses = trades.filter(t => t.pnl <= 0);
+        const winRate = trades.length > 0 ? (wins.length / trades.length) * 100 : 0;
+        const grossProfit = wins.reduce((sum, t) => sum + t.pnl, 0);
+        const grossLoss = Math.abs(losses.reduce((sum, t) => sum + t.pnl, 0));
+        const profitFactor = grossLoss === 0 ? grossProfit : grossProfit / grossLoss;
+
+        return { trades, totalPnl, winRate, wins: wins.length, losses: losses.length, profitFactor };
+    };
+
+    useEffect(() => {
+        if (!latestQuote || !symbol || candles.length === 0 || isReplayActive) return;
 
         let securityId = "";
         const staticConfig = getSymbolConfig(symbol);
@@ -293,15 +422,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         const chartHeight = height - margin.top - margin.bottom;
 
         const svg = d3.select(svgRef.current);
+        svg.style("cursor", isReplayCutMode ? "crosshair" : (activeTool === 'cursor' ? "default" : "crosshair"));
         let g = svg.select<SVGGElement>(".main-g");
         if (g.empty()) {
             g = svg.append("g").attr("class", "main-g");
         }
         g.attr("transform", `translate(${margin.left},${margin.top})`);
 
-        const x = d3.scaleLinear().domain([0, candles.length]).range([0, chartWidth]);
-        const priceMin = d3.min(candles, (d: OHLCV) => d.low) || 0;
-        const priceMax = d3.max(candles, (d: OHLCV) => d.high) || 0;
+        const x = d3.scaleLinear().domain([0, displayCandles.length]).range([0, chartWidth]);
+        const priceMin = d3.min(displayCandles, (d: OHLCV) => d.low) || 0;
+        const priceMax = d3.max(displayCandles, (d: OHLCV) => d.high) || 0;
         const pricePadding = (priceMax - priceMin) * 0.12;
         const y = d3.scaleLinear().domain([priceMin - pricePadding, priceMax + pricePadding]).range([chartHeight, 0]);
 
@@ -340,7 +470,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
         const candleGroup = mainChartArea.selectAll<SVGGElement, any>(".candles").data([null]).join("g").attr("class", "candles");
         const drawCandles = (sx: d3.ScaleLinear<number, number>, sy: d3.ScaleLinear<number, number>) => {
-            const candleSelection = candleGroup.selectAll<SVGGElement, OHLCV>(".candle").data(candles, (d: OHLCV) => d.time.toString());
+            const candleSelection = candleGroup.selectAll<SVGGElement, OHLCV>(".candle").data(displayCandles, (d: OHLCV) => d.time.toString());
             const enter = candleSelection.enter().append("g").attr("class", "candle");
             enter.append("line").attr("class", "wick").attr("stroke-width", 1);
             enter.append("rect").attr("class", "body").attr("stroke-width", 1).attr("rx", 0.5);
@@ -361,111 +491,146 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             const indicatorGroup = mainChartArea.selectAll<SVGGElement, any>(".indicators").data([null]).join("g").attr("class", "indicators");
 
             const adrSettings = chartSettings.indicators?.adr || DEFAULT_CHART_SETTINGS.indicators.adr;
-            const definedAdr = (key: string) => (d: OHLCV) => typeof d.adr?.[key] === 'number' && d.adr[key] > 0;
-            const yAdr = (key: string) => (d: OHLCV) => sy(d.adr[key] as number);
 
-            // Area generators for the colored zones
-            const areaHigh = d3.area<OHLCV>()
-                .defined(d => definedAdr('adr1h')(d) && definedAdr('adr2h')(d))
-                .x((d, i) => sx(i))
-                .y0(yAdr('adr1h'))
-                .y1(yAdr('adr2h'));
+            if (!adrSettings.enabled) {
+                indicatorGroup.selectAll("*").remove();
+            } else {
+                const definedAdr = (key: string) => (d: OHLCV) => typeof d.adr?.[key] === 'number' && d.adr[key] > 0;
+                const yAdr = (key: string) => (d: OHLCV) => sy(d.adr[key] as number);
 
-            const areaLow = d3.area<OHLCV>()
-                .defined(d => definedAdr('adr1l')(d) && definedAdr('adr2l')(d))
-                .x((d, i) => sx(i))
-                .y0(yAdr('adr1l'))
-                .y1(yAdr('adr2l'));
+                // Area generators for the colored zones
+                const areaHigh = d3.area<OHLCV>()
+                    .defined(d => definedAdr('adr1h')(d) && definedAdr('adr2h')(d))
+                    .x((d, i) => sx(i))
+                    .y0(yAdr('adr1h'))
+                    .y1(yAdr('adr2h'));
 
-            // Plot Resistance Zone (Highs)
-            indicatorGroup.selectAll(".area-r-zone").data([candles]).join("path").attr("class", "area-r-zone")
-                .attr("d", areaHigh as any)
-                .attr("fill", "#ef4444")
-                .attr("fill-opacity", 0.08);
+                const areaLow = d3.area<OHLCV>()
+                    .defined(d => definedAdr('adr1l')(d) && definedAdr('adr2l')(d))
+                    .x((d, i) => sx(i))
+                    .y0(yAdr('adr1l'))
+                    .y1(yAdr('adr2l'));
 
-            // Plot Support Zone (Lows)
-            indicatorGroup.selectAll(".area-s-zone").data([candles]).join("path").attr("class", "area-s-zone")
-                .attr("d", areaLow as any)
-                .attr("fill", "#10b981")
-                .attr("fill-opacity", 0.08);
+                // Plot Resistance Zone (Highs)
+                indicatorGroup.selectAll(".area-r-zone").data([displayCandles]).join("path").attr("class", "area-r-zone")
+                    .attr("d", areaHigh as any)
+                    .attr("fill", "#ef4444")
+                    .attr("fill-opacity", 0.08);
 
-            const buildLine = (key: string) => d3.line<OHLCV>()
-                .defined(definedAdr(key))
-                .x((d, i) => sx(i))
-                .y(yAdr(key));
+                // Plot Support Zone (Lows)
+                indicatorGroup.selectAll(".area-s-zone").data([displayCandles]).join("path").attr("class", "area-s-zone")
+                    .attr("d", areaLow as any)
+                    .attr("fill", "#10b981")
+                    .attr("fill-opacity", 0.08);
 
-            // Mid line
-            indicatorGroup.selectAll(".line-mid").data([candles]).join("path").attr("class", "line-mid")
-                .attr("d", buildLine('open') as any)
-                .attr("fill", "none")
-                .attr("stroke", "#9ca3af")
-                .attr("stroke-width", 2)
-                .attr("opacity", 0.8);
+                const buildLine = (key: string) => d3.line<OHLCV>()
+                    .defined(definedAdr(key))
+                    .x((d, i) => sx(i))
+                    .y(yAdr(key));
 
-            // Bounding lines
-            [
-                { key: 'adr1h', color: '#ef4444', label: 'R1' }, { key: 'adr2h', color: '#ef4444', label: 'R2' },
-                { key: 'adr1l', color: '#10b981', label: 'S1' }, { key: 'adr2l', color: '#10b981', label: 'S2' }
-            ].forEach(lineConf => {
-                indicatorGroup.selectAll(`.line-${lineConf.key}`).data([candles]).join("path").attr("class", `line-${lineConf.key}`)
-                    .attr("d", buildLine(lineConf.key) as any)
+                // Mid line
+                indicatorGroup.selectAll(".line-mid").data([displayCandles]).join("path").attr("class", "line-mid")
+                    .attr("d", buildLine('open') as any)
                     .attr("fill", "none")
-                    .attr("stroke", lineConf.color)
-                    .attr("stroke-width", 1)
-                    .attr("opacity", 0.5);
-
-                if (adrSettings.showLabels && candles.length > 0) {
-                    const lastD = candles[candles.length - 1];
-                    if (definedAdr(lineConf.key)(lastD)) {
-                        indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
-                            .attr("x", sx(candles.length - 1) + 5)
-                            .attr("y", yAdr(lineConf.key)(lastD) + 3)
-                            .attr("fill", lineConf.color)
-                            .attr("font-size", "10px")
-                            .attr("font-weight", "black")
-                            .text(lineConf.label);
-                    }
-                } else {
-                    indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
-                }
-            });
-
-            // ADR Up/Dn 2 (Outliers)
-            const outlierData = adrSettings.showSecondary ? [
-                { key: 'adrUp2', color: '#ef4444', label: 'R+' },
-                { key: 'adrDn2', color: '#10b981', label: 'S+' }
-            ] : [];
-
-            // If hiding secondary, cleanup existing ones
-            if (!adrSettings.showSecondary) {
-                indicatorGroup.selectAll(".line-adrUp2, .line-adrDn2, .label-adrUp2, .label-adrDn2").remove();
-            }
-
-            outlierData.forEach(lineConf => {
-                indicatorGroup.selectAll(`.line-${lineConf.key}`).data([candles]).join("path").attr("class", `line-${lineConf.key}`)
-                    .attr("d", buildLine(lineConf.key) as any)
-                    .attr("fill", "none")
-                    .attr("stroke", lineConf.color)
-                    .attr("stroke-width", 1.5)
-                    .attr("stroke-dasharray", "2,4")
-                    .attr("stroke-linecap", "round")
+                    .attr("stroke", "#9ca3af")
+                    .attr("stroke-width", 2)
                     .attr("opacity", 0.8);
 
-                if (adrSettings.showLabels && candles.length > 0) {
-                    const lastD = candles[candles.length - 1];
-                    if (definedAdr(lineConf.key)(lastD)) {
-                        indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
-                            .attr("x", sx(candles.length - 1) + 5)
-                            .attr("y", yAdr(lineConf.key)(lastD) + 3)
-                            .attr("fill", lineConf.color)
-                            .attr("font-size", "10px")
-                            .attr("font-weight", "black")
-                            .text(lineConf.label);
+                // Bounding lines
+                [
+                    { key: 'adr1h', color: '#ef4444', label: 'R1' }, { key: 'adr2h', color: '#ef4444', label: 'R2' },
+                    { key: 'adr1l', color: '#10b981', label: 'S1' }, { key: 'adr2l', color: '#10b981', label: 'S2' }
+                ].forEach(lineConf => {
+                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([displayCandles]).join("path").attr("class", `line-${lineConf.key}`)
+                        .attr("d", buildLine(lineConf.key) as any)
+                        .attr("fill", "none")
+                        .attr("stroke", lineConf.color)
+                        .attr("stroke-width", 1)
+                        .attr("opacity", 0.5);
+
+                    if (adrSettings.showLabels && displayCandles.length > 0) {
+                        const lastD = displayCandles[displayCandles.length - 1];
+                        if (definedAdr(lineConf.key)(lastD)) {
+                            indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
+                                .attr("x", sx(displayCandles.length - 1) + 5)
+                                .attr("y", yAdr(lineConf.key)(lastD) + 3)
+                                .attr("fill", lineConf.color)
+                                .attr("font-size", "10px")
+                                .attr("font-weight", "black")
+                                .text(lineConf.label);
+                        }
+                    } else {
+                        indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
                     }
-                } else {
-                    indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
+                });
+
+                // ADR Up/Dn 2 (Outliers)
+                const outlierData = adrSettings.showSecondary ? [
+                    { key: 'adrUp2', color: '#ef4444', label: 'R+' },
+                    { key: 'adrDn2', color: '#10b981', label: 'S+' }
+                ] : [];
+
+                // If hiding secondary, cleanup existing ones
+                if (!adrSettings.showSecondary) {
+                    indicatorGroup.selectAll(".line-adrUp2, .line-adrDn2, .label-adrUp2, .label-adrDn2").remove();
                 }
-            });
+
+                outlierData.forEach(lineConf => {
+                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([displayCandles]).join("path").attr("class", `line-${lineConf.key}`)
+                        .attr("d", buildLine(lineConf.key) as any)
+                        .attr("fill", "none")
+                        .attr("stroke", lineConf.color)
+                        .attr("stroke-width", 1.5)
+                        .attr("stroke-dasharray", "2,4")
+                        .attr("stroke-linecap", "round")
+                        .attr("opacity", 0.8);
+
+                    if (adrSettings.showLabels && displayCandles.length > 0) {
+                        const lastD = displayCandles[displayCandles.length - 1];
+                        if (definedAdr(lineConf.key)(lastD)) {
+                            indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
+                                .attr("x", sx(displayCandles.length - 1) + 5)
+                                .attr("y", yAdr(lineConf.key)(lastD) + 3)
+                                .attr("fill", lineConf.color)
+                                .attr("font-size", "10px")
+                                .attr("font-weight", "black")
+                                .text(lineConf.label);
+                        }
+                    } else {
+                        indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
+                    }
+                });
+            }
+
+            // DRAW REPLAY ORDERS
+            const replayOrderGroup = g.selectAll<SVGGElement, any>(".replay-orders-g").data([null]).join("g").attr("class", "replay-orders-g");
+
+            replayOrderGroup.selectAll(".replay-marker")
+                .data(replayOrders.filter(o => o.index <= replayIndex))
+                .join("g")
+                .attr("class", "replay-marker")
+                .each(function (d) {
+                    const el = d3.select(this);
+                    const xPos = sx(d.index);
+                    const yPos = sy(d.price);
+                    const color = d.type === 'BUY' ? '#10b981' : '#ef4444';
+
+                    el.selectAll("path").data([null]).join("path")
+                        .attr("d", d.type === 'BUY' ? "M-6,8 L0,0 L6,8 Z" : "M-6,-8 L0,0 L6,-8 Z")
+                        .attr("transform", `translate(${xPos}, ${yPos + (d.type === 'BUY' ? 10 : -10)})`)
+                        .attr("fill", color)
+                        .attr("stroke", "white")
+                        .attr("stroke-width", 1);
+
+                    el.selectAll("text").data([null]).join("text")
+                        .attr("x", xPos)
+                        .attr("y", yPos + (d.type === 'BUY' ? 25 : -25))
+                        .attr("text-anchor", "middle")
+                        .attr("font-size", "10px")
+                        .attr("font-weight", "bold")
+                        .attr("fill", color)
+                        .text(d.type);
+                });
         };
 
         const yAxisGroup = g.selectAll<SVGGElement, any>(".y-axis").data([null]).join("g").attr("class", "y-axis").attr("transform", `translate(${chartWidth}, 0)`);
@@ -751,6 +916,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             const [mx, my] = d3.pointer(e);
             const cx = mx - margin.left, cy = my - margin.top;
             const idx = Math.round(currentScaleX.invert(cx));
+
+            if (isReplayCutMode) {
+                if (idx >= 0 && idx < candles.length) {
+                    setReplayIndex(idx);
+                    setIsReplayActive(true);
+                    setIsReplayCutMode(false);
+                }
+                return;
+            }
+
             const time = getTimeAtIndex(idx).toString(), price = currentScaleY.invert(cy);
 
             const tool = activeToolRef.current;
@@ -798,7 +973,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
-    }, [candles, dimensions, theme, colors, chartSettings, currentLivePrice]);
+    }, [displayCandles, dimensions, theme, colors, chartSettings, currentLivePrice, isReplayCutMode, activeTool]);
 
     const updateSelectedDrawing = (updates: Partial<Drawing>) => {
         if (!selectedId) return;
@@ -812,7 +987,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         }
     };
 
-    const currentCandle = hoveredCandle || data[data.length - 1];
+    const currentCandle = hoveredCandle || displayCandles[displayCandles.length - 1];
 
     return (
         <ContextMenu.Root>
@@ -855,6 +1030,19 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                                     <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Market Open</span>
                                 </div>
+                                {isReplayActive && (
+                                    <div className="flex items-center gap-1 px-2 py-0.5 bg-orange-500 rounded text-[10px] font-black text-white uppercase tracking-widest animate-pulse shadow-lg">
+                                        Replay Mode
+                                    </div>
+                                )}
+                                <button
+                                    onClick={() => isReplayActive ? setIsReplayActive(false) : setIsReplayCutMode(true)}
+                                    className={`flex items-center gap-2 px-3 py-1 rounded transition-all pointer-events-auto shadow-sm ${isReplayActive ? 'bg-orange-500 text-white animate-pulse' : 'bg-white dark:bg-[#1e222d] text-gray-400 hover:text-orange-500 border border-gray-200 dark:border-[#363a45]'}`}
+                                    title="Bar Replay"
+                                >
+                                    <RotateCcw size={14} className={isReplayActive ? 'rotate-180' : ''} />
+                                    <span className="text-[10px] font-black uppercase tracking-widest">Replay</span>
+                                </button>
                             </div>
                             <div className="flex items-center gap-4 text-[11px] font-bold font-mono">
                                 <div className="flex items-center gap-1.5 border-r border-gray-200 dark:border-[#2a2e39] pr-3">
@@ -1014,6 +1202,186 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                     </Dialog.Root>
 
                     <ChartSettingsModal open={isChartSettingsOpen} onOpenChange={setIsChartSettingsOpen} settings={chartSettings} onUpdate={setChartSettings} />
+
+                    {isReplayActive && (
+                        <ReplayToolbar
+                            isPlaying={isReplayPlaying}
+                            speed={replaySpeed}
+                            onPlayPause={() => setIsReplayPlaying(!isReplayPlaying)}
+                            onStepForward={() => setReplayIndex(p => Math.min(candles.length - 1, p + 1))}
+                            onStepBackward={() => setReplayIndex(p => Math.max(0, p - 1))}
+                            onClose={() => {
+                                setIsReplayActive(false);
+                                setIsReplayPlaying(false);
+                                setReplayIndex(-1);
+                            }}
+                            onSpeedChange={setReplaySpeed}
+                            onJumpTo={() => setIsReplayCutMode(true)}
+                        >
+                            <div className="flex items-center gap-2 border-l border-white/20 pl-2 ml-1">
+                                <button
+                                    onClick={() => handleReplayTrade('BUY')}
+                                    className="bg-emerald-500 hover:bg-emerald-600 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 transition-all active:scale-95 shadow-lg"
+                                >
+                                    <ShoppingCart size={12} /> Buy
+                                </button>
+                                <button
+                                    onClick={() => handleReplayTrade('SELL')}
+                                    className="bg-rose-500 hover:bg-rose-600 text-white px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 transition-all active:scale-95 shadow-lg"
+                                >
+                                    <ShoppingCart size={12} /> Sell
+                                </button>
+                                {replayPosition && (
+                                    <div className="flex items-center gap-2 bg-black/20 px-2 py-1 rounded-md border border-white/10">
+                                        <div className={`text-[10px] font-black ${replayPosition.qty > 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                            {replayPosition.qty > 0 ? 'LONG' : 'SHORT'} {Math.abs(replayPosition.qty)}u
+                                        </div>
+                                        <div className="text-[10px] font-bold text-white/70">
+                                            @ {replayPosition.avgPrice.toFixed(2)}
+                                        </div>
+                                        <div className={`text-[10px] font-black px-1.5 py-0.5 rounded ${((candles[replayIndex]?.close - replayPosition.avgPrice) * replayPosition.qty) >= 0 ? 'bg-emerald-500/20 text-emerald-400' : 'bg-rose-500/20 text-rose-400'}`}>
+                                            {(((candles[replayIndex]?.close - replayPosition.avgPrice) * replayPosition.qty)).toFixed(2)}
+                                        </div>
+                                    </div>
+                                )}
+                                {replayOrders.length > 0 && !replayPosition && (
+                                    <div className="text-[9px] font-bold text-white/40 uppercase tracking-widest flex items-center gap-1">
+                                        <History size={10} /> Session P&L: {(replayOrders.reduce((sum, o) => sum + (o.type === 'SELL' ? o.price : -o.price), 0) + (replayPosition ? ((replayPosition as any).qty * (candles[replayIndex]?.close || 0)) : 0)).toFixed(2)}
+                                    </div>
+                                )}
+                                {replayOrders.length > 0 && (
+                                    <button
+                                        onClick={() => setIsReplayReportOpen(true)}
+                                        className="bg-blue-600/20 hover:bg-blue-600/40 text-blue-400 px-3 py-1 rounded-md text-[10px] font-black uppercase tracking-tighter flex items-center gap-1 border border-blue-500/30 transition-all active:scale-95"
+                                    >
+                                        <BarChart2 size={12} /> Report
+                                    </button>
+                                )}
+                            </div>
+                        </ReplayToolbar>
+                    )}
+
+                    <AnimatePresence>
+                        {isReplayReportOpen && (
+                            <motion.div
+                                initial={{ opacity: 0 }}
+                                animate={{ opacity: 1 }}
+                                exit={{ opacity: 0 }}
+                                className="absolute inset-0 bg-background/80 backdrop-blur-md z-[100] flex items-center justify-center p-8"
+                            >
+                                <motion.div
+                                    initial={{ scale: 0.9, y: 20 }}
+                                    animate={{ scale: 1, y: 0 }}
+                                    className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-4xl max-h-[80vh] flex flex-col overflow-hidden"
+                                >
+                                    <div className="p-6 border-b border-border flex items-center justify-between bg-muted/30">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-600 rounded-lg text-white shadow-lg">
+                                                <BarChart2 size={24} />
+                                            </div>
+                                            <div>
+                                                <h2 className="text-xl font-black uppercase tracking-tighter">Replay Performance Report</h2>
+                                                <p className="text-xs text-muted-foreground font-bold uppercase tracking-widest opacity-60">Session Analytics · {symbol}</p>
+                                            </div>
+                                        </div>
+                                        <button onClick={() => setIsReplayReportOpen(false)} className="p-2 hover:bg-muted rounded-full transition-colors">
+                                            <X size={20} />
+                                        </button>
+                                    </div>
+
+                                    <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                                        {/* Stats Grid */}
+                                        <div className="grid grid-cols-4 gap-4">
+                                            {(() => {
+                                                const stats = processReplayTrades();
+                                                return (
+                                                    <>
+                                                        <div className="bg-muted/50 p-4 rounded-xl border border-border">
+                                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Net P&L</p>
+                                                            <p className={`text-2xl font-black tabular-nums ${stats.totalPnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                                {stats.totalPnl >= 0 ? '+' : ''}{stats.totalPnl.toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="bg-muted/50 p-4 rounded-xl border border-border">
+                                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Win Rate</p>
+                                                            <p className="text-2xl font-black tabular-nums text-foreground">
+                                                                {stats.winRate.toFixed(1)}%
+                                                            </p>
+                                                        </div>
+                                                        <div className="bg-muted/50 p-4 rounded-xl border border-border">
+                                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Profit Factor</p>
+                                                            <p className="text-2xl font-black tabular-nums text-blue-500">
+                                                                {stats.profitFactor.toFixed(2)}
+                                                            </p>
+                                                        </div>
+                                                        <div className="bg-muted/50 p-4 rounded-xl border border-border">
+                                                            <p className="text-[10px] font-black text-muted-foreground uppercase tracking-widest mb-1">Total Trades</p>
+                                                            <p className="text-2xl font-black tabular-nums text-foreground">
+                                                                {stats.trades.length}
+                                                            </p>
+                                                        </div>
+                                                    </>
+                                                );
+                                            })()}
+                                        </div>
+
+                                        {/* Trades Table */}
+                                        <div className="space-y-4">
+                                            <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2">
+                                                <History size={16} className="text-blue-500" /> Trade History
+                                            </h3>
+                                            <div className="border border-border rounded-xl overflow-hidden">
+                                                <table className="w-full text-left border-collapse">
+                                                    <thead>
+                                                        <tr className="bg-muted/50 text-[10px] font-black uppercase tracking-widest text-muted-foreground">
+                                                            <th className="px-4 py-3">Side</th>
+                                                            <th className="px-4 py-3">Entry</th>
+                                                            <th className="px-4 py-3">Exit</th>
+                                                            <th className="px-4 py-3">Qty</th>
+                                                            <th className="px-4 py-3 text-right">P&L</th>
+                                                        </tr>
+                                                    </thead>
+                                                    <tbody className="divide-y divide-border">
+                                                        {processReplayTrades().trades.map((t: any, i: number) => (
+                                                            <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                                                <td className="px-4 py-3">
+                                                                    <span className={`px-2 py-0.5 rounded text-[9px] font-black ${t.side === 'LONG' ? 'bg-emerald-500/20 text-emerald-500' : 'bg-rose-500/20 text-rose-500'}`}>
+                                                                        {t.side}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="px-4 py-3 text-xs font-bold tabular-nums">{t.entry.toFixed(2)}</td>
+                                                                <td className="px-4 py-3 text-xs font-bold tabular-nums">{t.exit.toFixed(2)}</td>
+                                                                <td className="px-4 py-3 text-xs font-bold tabular-nums">{t.qty}</td>
+                                                                <td className={`px-4 py-3 text-xs font-black text-right tabular-nums ${t.pnl >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                                                    {t.pnl >= 0 ? '+' : ''}{t.pnl.toFixed(2)}
+                                                                </td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6 bg-muted/30 border-t border-border flex justify-end">
+                                        <button
+                                            onClick={() => setIsReplayReportOpen(false)}
+                                            className="px-8 py-3 bg-foreground text-background text-xs font-black rounded-xl uppercase tracking-widest hover:opacity-90 transition-all active:scale-95 shadow-xl"
+                                        >
+                                            Done
+                                        </button>
+                                    </div>
+                                </motion.div>
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+
+                    {isReplayCutMode && (
+                        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-50 bg-blue-600 text-white px-4 py-2 rounded-full shadow-2xl animate-bounce flex items-center gap-2 uppercase text-[11px] font-black tracking-widest pointer-events-none">
+                            <Scissors size={14} />
+                            Select a bar to start replay
+                        </div>
+                    )}
 
                     {/* Loading Overlay */}
                     {isLoading && (

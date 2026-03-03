@@ -98,6 +98,7 @@ export interface ChartSettings {
     };
     indicators: {
         adr: {
+            enabled: boolean;
             p1: number;
             p2: number;
             mult2: number;
@@ -135,6 +136,7 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
     },
     indicators: {
         adr: {
+            enabled: true,
             p1: 14,
             p2: 7,
             mult2: 0.25,

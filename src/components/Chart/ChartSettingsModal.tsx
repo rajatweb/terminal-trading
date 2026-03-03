@@ -240,6 +240,8 @@ export const ChartSettingsModal: React.FC<ChartSettingsModalProps> = ({
                                                 <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-[#787b86]">ADRx3 Indicator</h3>
                                             </div>
                                             <div className="space-y-4">
+                                                <ProToggle label="Enable ADR Indicator" checked={settings.indicators?.adr?.enabled ?? DEFAULT_CHART_SETTINGS.indicators.adr.enabled} onChange={(v) => updateAdr({ enabled: v })} />
+
                                                 <div className="p-3 bg-gray-50 dark:bg-black/10 rounded-lg border border-gray-100 dark:border-[#363a45] space-y-4">
                                                     <div className="flex items-center justify-between">
                                                         <label className="text-[12px] font-bold text-gray-600 dark:text-[#d1d4dc]">ADR 1 Period</label>
