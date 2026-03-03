@@ -1,8 +1,10 @@
 export interface AdrValues {
-    adr1h: number;
-    adr1l: number;
-    adr2h: number;
-    adr2l: number;
+    adr1h: number; // R1 High
+    adr1l: number; // S1 Low
+    adr2h: number; // R2 High
+    adr2l: number; // S2 Low
+    adrUp2: number | null; // Secondary Resistance level based on mult2
+    adrDn2: number | null; // Secondary Support level based on mult2
     open: number;
 }
 
@@ -16,19 +18,18 @@ export interface CandleWithAdr extends Record<string, any> {
     adr?: AdrValues; // Will be attached per candle
 }
 
-// Convert unix timestamp (seconds) to YYYY-MM-DD in IST
-function getIstDateStr(timestampSeconds: number) {
-    const d = new Date(timestampSeconds * 1000);
-    const totalMinutes = d.getUTCHours() * 60 + d.getUTCMinutes() + 330; // +330 = IST
-    const h = Math.floor(totalMinutes / 60) % 24;
-    const isNextDay = Math.floor(totalMinutes / 60) >= 24;
+function normalizeToSeconds(ts: number) {
+    if (!ts) return 0;
+    return ts > 10000000000 ? Math.floor(ts / 1000) : ts;
+}
 
-    // We want the calendar date. Instead of manual math, just use an offset Date:
+function getIstDateStr(ts: number) {
+    const timestampSeconds = normalizeToSeconds(ts);
     const offsetDate = new Date(timestampSeconds * 1000 + (330 * 60 * 1000));
     return offsetDate.toISOString().split('T')[0];
 }
 
-export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[] {
+export function calculateADRx2(candles: any[], p1 = 14, p2 = 7, mult2 = 0.25): CandleWithAdr[] {
     if (!candles || candles.length === 0) return [];
 
     // 1. Group by daily date string to compute Daily OHLC
@@ -36,6 +37,7 @@ export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[]
     const datesOrdered: string[] = [];
 
     candles.forEach((c) => {
+        c.time = normalizeToSeconds(c.time);
         const dStr = getIstDateStr(c.time);
         if (!dailyMap.has(dStr)) {
             datesOrdered.push(dStr);
@@ -74,11 +76,13 @@ export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[]
 
             return Math.max(0, smaH - smaL); // ADR is difference of SMA(high) and SMA(low)
         };
-
         const adr1 = getAdrs(p1);
         const adr2 = getAdrs(p2);
 
         const open = todaySummary.o; // exact today's actual open
+
+        const adrUp2 = adr2 > 0 ? open + (adr2 * mult2) : null;
+        const adrDn2 = adr2 > 0 ? open - (adr2 * mult2) : null;
 
         dayAdrs.set(todayStr, {
             open,
@@ -86,16 +90,11 @@ export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[]
             adr1l: adr1 > 0 ? open - (adr1 / 2) : 0,
             adr2h: adr2 > 0 ? open + (adr2 / 2) : 0,
             adr2l: adr2 > 0 ? open - (adr2 / 2) : 0,
+            adrUp2,
+            adrDn2
         });
     }
 
-    // 3. Map values and calculate EMAs
-    let ema20 = 0;
-    let ema50 = 0;
-    let ema200 = 0;
-    const alpha20 = 2 / (20 + 1);
-    const alpha50 = 2 / (50 + 1);
-    const alpha200 = 2 / (200 + 1);
     const volWindow: number[] = [];
 
     return candles.map((c, idx) => {
@@ -107,17 +106,6 @@ export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[]
         const prevDayStr = dateIdx > 0 ? datesOrdered[dateIdx - 1] : null;
         const prevClose = prevDayStr ? dailyMap.get(prevDayStr)!.c : c.open;
 
-        // EMA Calculation
-        if (idx === 0) {
-            ema20 = c.close;
-            ema50 = c.close;
-            ema200 = c.close;
-        } else {
-            ema20 = (c.close - ema20) * alpha20 + ema20;
-            ema50 = (c.close - ema50) * alpha50 + ema50;
-            ema200 = (c.close - ema200) * alpha200 + ema200;
-        }
-
         // Rolling Volume (last 20)
         volWindow.push(c.volume || 0);
         if (volWindow.length > 20) volWindow.shift();
@@ -127,9 +115,6 @@ export function calculateADRx2(candles: any[], p1 = 14, p2 = 7): CandleWithAdr[]
             ...c,
             adr: adrVals,
             prevClose,
-            ema20,
-            ema50,
-            ema200,
             avgVol
         };
     });

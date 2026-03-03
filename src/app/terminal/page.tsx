@@ -5,8 +5,9 @@ import ZenithTerminal, { WatchlistItem } from "@/components/Chart/ZenithTerminal
 import { Position, OptionStrike } from "@/types/terminal";
 
 import { useTradingStore } from "@/stores/tradingStore";
-import { OHLCV } from "@/types/chart";
+import { OHLCV, DEFAULT_CHART_SETTINGS } from "@/types/chart";
 import { getSymbolConfig } from "@/lib/dhan/symbols";
+import { calculateADRx2 } from "@/lib/indicator/adrIndicator";
 
 /**
  * Static dummy data for the terminal.
@@ -30,21 +31,27 @@ const STATIC_OPTION_CHAIN: OptionStrike[] = Array.from({ length: 21 }, (_, i) =>
 
 export default function Home() {
   // We now use a static set of data without real-time ticker updates
-  const { isAuthenticated, isConnected, dhanConfig, brokerCredentials, activeBroker, watchlists, activeSymbol, setSymbol: setGlobalSymbol } = useTradingStore();
+  const {
+    isAuthenticated,
+    isConnected,
+    dhanConfig,
+    brokerCredentials,
+    activeBroker,
+    watchlists,
+    activeSymbol,
+    setSymbol: setGlobalSymbol,
+    terminalSettings,
+    updateTerminalSettings,
+    chartSettings
+  } = useTradingStore();
   const [data, setData] = useState<OHLCV[]>([]);
-  const [symbol, setSymbol] = useState("NIFTY");
-  const [interval, setIntervalVal] = useState("1m");
+  const [symbol, setSymbol] = useState(activeSymbol || "NIFTY");
+  const [interval, setIntervalVal] = useState(terminalSettings.interval || "1m");
   const [isLoading, setIsLoading] = useState(false);
 
   // Date Range state
-  const [fromDate, setFromDate] = useState<string>(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 3);
-    return d.toISOString().split('T')[0];
-  });
-  const [toDate, setToDate] = useState<string>(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [fromDate, setFromDate] = useState<string>(terminalSettings.fromDate);
+  const [toDate, setToDate] = useState<string>(terminalSettings.toDate);
 
   // Sync local symbol with global activeSymbol
   React.useEffect(() => {
@@ -99,21 +106,27 @@ export default function Home() {
       }
       // Calculate requested dates
       let finalFromDate = from || new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const finalToDate = to || new Date().toISOString().split('T')[0];
+      let finalToDate = to || new Date().toISOString().split('T')[0];
 
       const isIntraday = int.includes('m') || int.includes('h') || !isNaN(Number(int));
 
+      // Buffer the fetch by 20 calendar days securely to allow 14-trading-day ADR Indicator to warm up!
+      const fetchFromDateObj = new Date(finalFromDate);
+      fetchFromDateObj.setDate(fetchFromDateObj.getDate() - 20);
+      const apiFromDate = fetchFromDateObj.toISOString().split('T')[0];
+
       if (isIntraday) {
-        // Enforce max 90 days limit for Dhan Intraday
-        const fromD = new Date(finalFromDate);
+        // Enforce max 90 days limit for Dhan Intraday INCLUDING the 20 day warmup buffer
+        const apiFromD = new Date(apiFromDate);
         const toD = new Date(finalToDate);
-        const diffTime = toD.getTime() - fromD.getTime();
+        const diffTime = toD.getTime() - apiFromD.getTime();
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
+
         if (diffDays > 89) {
-          console.warn("Intraday chart restricted to 90 days. Adjusting fromDate.");
-          const newFrom = new Date(toD);
-          newFrom.setDate(newFrom.getDate() - 89);
-          finalFromDate = newFrom.toISOString().split('T')[0];
+          console.warn(`Intraday chart restricted to 90 days (inc warmup). Adjusting toDate down.`);
+          const newTo = new Date(apiFromD);
+          newTo.setDate(newTo.getDate() + 89);
+          finalToDate = newTo.toISOString().split('T')[0];
         }
       }
 
@@ -125,7 +138,7 @@ export default function Home() {
         instrument: (symbolConfig.segment === 'IDX_I' || symbolConfig.type === 'INDEX') ? 'INDEX' :
           (symbolConfig.segment.includes('FNO') || symbolConfig.type === 'OPTION') ? 'OPTIDX' : 'EQUITY',
         expiryCode: 0,
-        fromDate: finalFromDate,
+        fromDate: apiFromDate,
         toDate: finalToDate
       };
 
@@ -152,7 +165,33 @@ export default function Home() {
       console.log("API Response:", json);
 
       if (json.success && Array.isArray(json.data)) {
-        setData(json.data);
+        // Clean out blank/illiquid candles populated by the API (0 price)
+        const validCandles = json.data.filter((c: any) => c.open > 0 && c.high > 0 && c.low > 0 && c.close > 0 && c.time > 0);
+
+        // Hydrate data with ADR indicators utilizing the 20-day buffer
+        const adrConf = chartSettings.indicators?.adr || DEFAULT_CHART_SETTINGS.indicators.adr;
+        const { p1, p2, mult2 } = adrConf;
+        const enrichedData = calculateADRx2(validCandles, p1, p2, mult2);
+
+        // Trim back the 20-day buffer from the view exactly to the user's requested finalFromDate
+        const requestedStartTs = new Date(finalFromDate).getTime();
+
+        // Note: some indicator logic depends on daily mapping, so trimming here doesn't break values already mapped to candles
+        let trimmedData = enrichedData;
+        if (enrichedData.length > 0) {
+          // Finding index of first candle that falls on or after finalFromDate
+          // fallback timestamp keys are handled in the API response format
+          const startIndex = enrichedData.findIndex((c: any) => {
+            const candleTs = c.time * 1000; // API usually feeds epoch seconds but lets guarantee Date comparison natively
+            return c.time.toString().includes('-') ? new Date(c.time).getTime() >= requestedStartTs : new Date(c.time * 1000).getTime() >= requestedStartTs;
+          });
+
+          if (startIndex !== -1) {
+            trimmedData = enrichedData.slice(startIndex);
+          }
+        }
+
+        setData(trimmedData as any);
       } else {
         console.warn("No data returned from Dhan API. Reason:", json.error || "Unknown");
         setData([]);
@@ -173,7 +212,18 @@ export default function Home() {
 
   const handleIntervalChange = React.useCallback((newInterval: string) => {
     setIntervalVal(newInterval);
-  }, []);
+    updateTerminalSettings({ interval: newInterval });
+  }, [updateTerminalSettings]);
+
+  const handleFromDateChange = React.useCallback((date: string) => {
+    setFromDate(date);
+    updateTerminalSettings({ fromDate: date });
+  }, [updateTerminalSettings]);
+
+  const handleToDateChange = React.useCallback((date: string) => {
+    setToDate(date);
+    updateTerminalSettings({ toDate: date });
+  }, [updateTerminalSettings]);
 
   // Initial fetch when auth changes or mount
   React.useEffect(() => {
@@ -205,8 +255,8 @@ export default function Home() {
       isLoading={isLoading}
       fromDate={fromDate}
       toDate={toDate}
-      onFromDateChange={setFromDate}
-      onToDateChange={setToDate}
+      onFromDateChange={handleFromDateChange}
+      onToDateChange={handleToDateChange}
       headerTitle="Institutional Suite"
     />
   );

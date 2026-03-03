@@ -58,7 +58,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         return {
             securityId: Number(activeItem.securityId),
             ltp: activeItem.ltp,
-            ltt: Date.now(), // Fallback to now if ltt isn't precisely tracked in item
+            ltt: Date.now(),
             volume: activeItem.volume || 0,
             open: activeItem.open || activeItem.ltp,
             high: activeItem.high || activeItem.ltp,
@@ -66,6 +66,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             prevClose: activeItem.prevClose || activeItem.ltp
         };
     }, [activeItem]);
+
+    const storeChartSettings = useTradingStore(state => state.chartSettings);
+    const updateStoreChartSettings = useTradingStore(state => state.updateChartSettings);
+
     const containerRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -76,10 +80,12 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
     const [isSettingsOpen, setIsSettingsOpen] = useState(false);
     const [isChartSettingsOpen, setIsChartSettingsOpen] = useState(false);
-    const [chartSettings, setChartSettings] = useState<ChartSettings>(DEFAULT_CHART_SETTINGS);
     const [hoveredCandle, setHoveredCandle] = useState<OHLCV | null>(null);
 
     const { theme, setTheme } = useTheme();
+
+    const chartSettings = storeChartSettings;
+    const setChartSettings = updateStoreChartSettings;
 
     // Local state to maintain accumulated OHLC for live candles
     const [candles, setCandles] = useState<OHLCV[]>(data || []);
@@ -115,7 +121,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
         const ltp = latestQuote.ltp;
         const ltt = latestQuote.ltt || Date.now();
-        if (ltp === undefined) return;
+        if (ltp === undefined || ltp <= 0) return; // Prevent bad 0-price ticks from ruining scale
 
         setCandles(prev => {
             if (prev.length === 0) return prev;
@@ -188,6 +194,19 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         accent: '#2962ff'
     }), [theme]);
 
+    const sessionStarts = useMemo(() => {
+        const starts: number[] = [];
+        let lastDay = "";
+        candles.forEach((c, i) => {
+            const dStr = new Date(c.time * 1000).toDateString();
+            if (dStr !== lastDay) {
+                starts.push(i);
+                lastDay = dStr;
+            }
+        });
+        return starts;
+    }, [candles]);
+
     const [currentXScale, setCurrentXScale] = useState<d3.ScaleLinear<number, number> | null>(null);
     const [yScale, setYScale] = useState<d3.ScaleLinear<number, number> | null>(null);
 
@@ -204,6 +223,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const resizeObserver = useRef<ResizeObserver | null>(null);
     const dragStateRef = useRef(dragState);
     const activeToolRef = useRef(activeTool);
+    const zoomBehaviorRef = useRef<d3.ZoomBehavior<SVGSVGElement, unknown> | null>(null);
+    const yAxisDragRef = useRef<d3.DragBehavior<SVGGElement, unknown, unknown> | null>(null);
+    const isInteractionsBoundRef = useRef(false);
+    const defaultTransformRef = useRef<d3.ZoomTransform>(d3.zoomIdentity);
 
     // Sync refs with state/props
     useEffect(() => { dragStateRef.current = dragState; }, [dragState]);
@@ -219,8 +242,14 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     };
 
     const getTimeAtIndex = (idx: number) => {
+        const i = Math.floor(idx);
+        if (candles && candles[i]) {
+            return candles[i].time;
+        }
+        // Fallback for future/pre-session indices
         const step = getIntervalStep();
         const base = (candles && candles.length > 0) ? candles[0].time : 0;
+        if (base === 0) return 0;
         return base + (idx * step);
     };
 
@@ -293,9 +322,19 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             if (chartSettings.appearance.vertGridVisible) {
                 const [startIdx, endIdx] = sx.domain();
                 const tickStep = Math.ceil((endIdx - startIdx) / 10);
-                const xTicks = [];
+                let xTicks = [];
                 for (let i = Math.floor(startIdx); i <= endIdx; i += tickStep) xTicks.push(i);
-                gridGroup.selectAll(".v-grid").data(xTicks).join("line").attr("class", "v-grid").attr("x1", d => sx(d)).attr("x2", d => sx(d)).attr("y1", 0).attr("y2", chartHeight).attr("stroke", colors.grid).attr("stroke-width", 1);
+
+                // Add session starts to grid if visible
+                const visibleSessionStarts = sessionStarts.filter(idx => idx >= startIdx && idx <= endIdx);
+                xTicks = Array.from(new Set([...xTicks, ...visibleSessionStarts]));
+
+                gridGroup.selectAll(".v-grid").data(xTicks).join("line").attr("class", "v-grid")
+                    .attr("x1", d => sx(d)).attr("x2", d => sx(d))
+                    .attr("y1", 0).attr("y2", chartHeight)
+                    .attr("stroke", colors.grid)
+                    .attr("stroke-width", d => sessionStarts.includes(d) ? 1.5 : 1)
+                    .attr("stroke-opacity", d => sessionStarts.includes(d) ? 0.8 : 0.5);
             }
         };
 
@@ -317,6 +356,116 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 .attr("fill", d => ((d as OHLCV).close >= (d as OHLCV).open ? chartSettings.symbol.upColor : chartSettings.symbol.downColor))
                 .attr("stroke", d => ((d as OHLCV).close >= (d as OHLCV).open ? chartSettings.symbol.borderUpColor : chartSettings.symbol.borderDownColor));
             candleSelection.exit().remove();
+
+            // Draw Indicators (ADRx3 Improved logic)
+            const indicatorGroup = mainChartArea.selectAll<SVGGElement, any>(".indicators").data([null]).join("g").attr("class", "indicators");
+
+            const adrSettings = chartSettings.indicators?.adr || DEFAULT_CHART_SETTINGS.indicators.adr;
+            const definedAdr = (key: string) => (d: OHLCV) => typeof d.adr?.[key] === 'number' && d.adr[key] > 0;
+            const yAdr = (key: string) => (d: OHLCV) => sy(d.adr[key] as number);
+
+            // Area generators for the colored zones
+            const areaHigh = d3.area<OHLCV>()
+                .defined(d => definedAdr('adr1h')(d) && definedAdr('adr2h')(d))
+                .x((d, i) => sx(i))
+                .y0(yAdr('adr1h'))
+                .y1(yAdr('adr2h'));
+
+            const areaLow = d3.area<OHLCV>()
+                .defined(d => definedAdr('adr1l')(d) && definedAdr('adr2l')(d))
+                .x((d, i) => sx(i))
+                .y0(yAdr('adr1l'))
+                .y1(yAdr('adr2l'));
+
+            // Plot Resistance Zone (Highs)
+            indicatorGroup.selectAll(".area-r-zone").data([candles]).join("path").attr("class", "area-r-zone")
+                .attr("d", areaHigh as any)
+                .attr("fill", "#ef4444")
+                .attr("fill-opacity", 0.08);
+
+            // Plot Support Zone (Lows)
+            indicatorGroup.selectAll(".area-s-zone").data([candles]).join("path").attr("class", "area-s-zone")
+                .attr("d", areaLow as any)
+                .attr("fill", "#10b981")
+                .attr("fill-opacity", 0.08);
+
+            const buildLine = (key: string) => d3.line<OHLCV>()
+                .defined(definedAdr(key))
+                .x((d, i) => sx(i))
+                .y(yAdr(key));
+
+            // Mid line
+            indicatorGroup.selectAll(".line-mid").data([candles]).join("path").attr("class", "line-mid")
+                .attr("d", buildLine('open') as any)
+                .attr("fill", "none")
+                .attr("stroke", "#9ca3af")
+                .attr("stroke-width", 2)
+                .attr("opacity", 0.8);
+
+            // Bounding lines
+            [
+                { key: 'adr1h', color: '#ef4444', label: 'R1' }, { key: 'adr2h', color: '#ef4444', label: 'R2' },
+                { key: 'adr1l', color: '#10b981', label: 'S1' }, { key: 'adr2l', color: '#10b981', label: 'S2' }
+            ].forEach(lineConf => {
+                indicatorGroup.selectAll(`.line-${lineConf.key}`).data([candles]).join("path").attr("class", `line-${lineConf.key}`)
+                    .attr("d", buildLine(lineConf.key) as any)
+                    .attr("fill", "none")
+                    .attr("stroke", lineConf.color)
+                    .attr("stroke-width", 1)
+                    .attr("opacity", 0.5);
+
+                if (adrSettings.showLabels && candles.length > 0) {
+                    const lastD = candles[candles.length - 1];
+                    if (definedAdr(lineConf.key)(lastD)) {
+                        indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
+                            .attr("x", sx(candles.length - 1) + 5)
+                            .attr("y", yAdr(lineConf.key)(lastD) + 3)
+                            .attr("fill", lineConf.color)
+                            .attr("font-size", "10px")
+                            .attr("font-weight", "black")
+                            .text(lineConf.label);
+                    }
+                } else {
+                    indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
+                }
+            });
+
+            // ADR Up/Dn 2 (Outliers)
+            const outlierData = adrSettings.showSecondary ? [
+                { key: 'adrUp2', color: '#ef4444', label: 'R+' },
+                { key: 'adrDn2', color: '#10b981', label: 'S+' }
+            ] : [];
+
+            // If hiding secondary, cleanup existing ones
+            if (!adrSettings.showSecondary) {
+                indicatorGroup.selectAll(".line-adrUp2, .line-adrDn2, .label-adrUp2, .label-adrDn2").remove();
+            }
+
+            outlierData.forEach(lineConf => {
+                indicatorGroup.selectAll(`.line-${lineConf.key}`).data([candles]).join("path").attr("class", `line-${lineConf.key}`)
+                    .attr("d", buildLine(lineConf.key) as any)
+                    .attr("fill", "none")
+                    .attr("stroke", lineConf.color)
+                    .attr("stroke-width", 1.5)
+                    .attr("stroke-dasharray", "2,4")
+                    .attr("stroke-linecap", "round")
+                    .attr("opacity", 0.8);
+
+                if (adrSettings.showLabels && candles.length > 0) {
+                    const lastD = candles[candles.length - 1];
+                    if (definedAdr(lineConf.key)(lastD)) {
+                        indicatorGroup.selectAll(`.label-${lineConf.key}`).data([lastD]).join("text").attr("class", `label-${lineConf.key}`)
+                            .attr("x", sx(candles.length - 1) + 5)
+                            .attr("y", yAdr(lineConf.key)(lastD) + 3)
+                            .attr("fill", lineConf.color)
+                            .attr("font-size", "10px")
+                            .attr("font-weight", "black")
+                            .text(lineConf.label);
+                    }
+                } else {
+                    indicatorGroup.selectAll(`.label-${lineConf.key}`).remove();
+                }
+            });
         };
 
         const yAxisGroup = g.selectAll<SVGGElement, any>(".y-axis").data([null]).join("g").attr("class", "y-axis").attr("transform", `translate(${chartWidth}, 0)`);
@@ -327,11 +476,28 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             yAxisGroup.selectAll(".tick text").attr("fill", colors.text).attr("font-size", "11px");
             const [startIdx, endIdx] = sx.domain();
             const tickStep = Math.ceil((endIdx - startIdx) / 10);
-            const tickValues = [];
+            let tickValues = [];
             for (let i = Math.floor(startIdx); i <= endIdx; i += tickStep) tickValues.push(i);
-            const timeFormat = interval === "D" ? d3.timeFormat("%b %d") : d3.timeFormat("%H:%M");
-            xAxisGroup.call(d3.axisBottom(sx).tickValues(tickValues).tickFormat(idx => timeFormat(new Date(getTimeAtIndex(idx as number) * 1000))) as any).select(".domain").remove();
-            xAxisGroup.selectAll(".tick text").attr("fill", colors.text).attr("font-size", "11px");
+
+            // Add session starts to labels
+            const visibleSessionStarts = sessionStarts.filter(idx => idx >= startIdx && idx <= endIdx);
+            tickValues = Array.from(new Set([...tickValues, ...visibleSessionStarts])).sort((a, b) => a - b);
+
+            const timeFormat = d3.timeFormat("%H:%M");
+            const dayFormat = d3.timeFormat("%d %b");
+
+            xAxisGroup.call(d3.axisBottom(sx).tickValues(tickValues).tickFormat(idx => {
+                const t = new Date(getTimeAtIndex(idx as number) * 1000);
+                if (sessionStarts.includes(idx as number)) {
+                    return dayFormat(t);
+                }
+                return interval === "D" ? d3.timeFormat("%b %d")(t) : timeFormat(t);
+            }) as any).select(".domain").remove();
+
+            xAxisGroup.selectAll(".tick text")
+                .attr("fill", colors.text)
+                .attr("font-size", "11px")
+                .attr("font-weight", idx => sessionStarts.includes(idx as number) ? "bold" : "normal");
         };
 
         // MOVED INITIAL DRAW TO AFTER ZOOM SETUP TO HANDLE RESTORE LOGIC
@@ -340,68 +506,71 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         let currentScaleY = y;
 
 
-        const zoom = d3.zoom<SVGSVGElement, unknown>()
-            .scaleExtent([0.1, 100])
-            .filter((event) => {
-                const target = event.target as Element;
-                // Prevent zoom if clicking on interactive drawing elements
-                const isDrawingInteraction = target.closest('.cursor-move') || target.closest('.cursor-crosshair') || target.closest('.cursor-pointer');
-                if (isDrawingInteraction) return false;
+        // Preserve zoom instance across renders so we don't break active Drag/Zoom gestures
+        let zoom = zoomBehaviorRef.current;
+        if (!zoom) {
+            zoom = d3.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 100]);
+            zoomBehaviorRef.current = zoom;
+        }
 
-                return !event.ctrlKey && !event.button;
-            })
-            .on("zoom", (e) => {
-                if (activeToolRef.current !== 'cursor' || dragStateRef.current) return;
+        zoom.filter((event) => {
+            const target = event.target as Element;
+            // Prevent zoom if clicking on interactive drawing elements
+            const isDrawingInteraction = target.closest('.cursor-move') || target.closest('.cursor-crosshair') || target.closest('.cursor-pointer');
+            if (isDrawingInteraction) return false;
+            // Allow 0 (Left Click) and 1 (Middle Click) for panning
+            return !event.ctrlKey && (event.button === 0 || event.button === 1 || event.type === 'wheel');
+        }).on("zoom", (e) => {
+            if (activeToolRef.current !== 'cursor' || dragStateRef.current) return;
+            transformRef.current = e.transform;
+            currentScaleX = e.transform.rescaleX(x);
+            setCurrentXScale(() => currentScaleX);
 
-                transformRef.current = e.transform;
-
-                currentScaleX = e.transform.rescaleX(x);
-                setCurrentXScale(() => currentScaleX);
-
-                if (isAutoPricedRef.current) {
-                    const [s, ed] = currentScaleX.domain();
-                    const visible = candles.filter((_, i) => i >= s && i <= ed);
-                    if (visible.length > 0) {
-                        const minP = d3.min(visible, d => d.low)!;
-                        const maxP = d3.max(visible, d => d.high)!;
-                        const pad = (maxP - minP) * 0.15;
-                        currentScaleY.domain([minP - pad, maxP + pad]);
-                    }
+            if (isAutoPricedRef.current) {
+                const [s, ed] = currentScaleX.domain();
+                const visible = candles.filter((_, i) => i >= s && i <= ed);
+                if (visible.length > 0) {
+                    const minP = d3.min(visible, d => d.low)!;
+                    const maxP = d3.max(visible, d => d.high)!;
+                    const pad = (maxP - minP) * 0.15;
+                    currentScaleY.domain([minP - pad, maxP + pad]);
                 }
-                setYScale(() => currentScaleY);
-
-                drawCandles(currentScaleX, currentScaleY);
-                updateAxes(currentScaleX, currentScaleY);
-                updateGrid(currentScaleX, currentScaleY);
-            });
+            }
+            setYScale(() => currentScaleY);
+            drawCandles(currentScaleX, currentScaleY);
+            updateAxes(currentScaleX, currentScaleY);
+            updateGrid(currentScaleX, currentScaleY);
+        });
 
         // Price Axis Zoom/Drag Logic
         let yDragStartDomain: [number, number] | null = null;
-        const yAxisZoom = d3.drag<SVGGElement, unknown>()
-            .on("start", () => {
-                isAutoPricedRef.current = false; // Disable auto-scale when manually zooming price
-                yDragStartDomain = currentScaleY.domain() as [number, number];
-            })
-            .on("drag", (e) => {
-                if (!yDragStartDomain) return;
-                // Calculate scale factor based on drag distance
-                const factor = Math.exp(-e.dy * 0.01);
-                const cy = currentScaleY.invert(chartHeight / 2);
-                const dMin = cy - (cy - yDragStartDomain[0]) * factor;
-                const dMax = cy + (yDragStartDomain[1] - cy) * factor;
+        let yAxisZoom = yAxisDragRef.current;
+        if (!yAxisZoom) {
+            yAxisZoom = d3.drag<SVGGElement, unknown>();
+            yAxisDragRef.current = yAxisZoom;
+        }
 
-                yDragStartDomain = [dMin, dMax];
-                currentScaleY.domain(yDragStartDomain);
-                setYScale(() => currentScaleY);
+        yAxisZoom.on("start", () => {
+            isAutoPricedRef.current = false; // Disable auto-scale when manually zooming price
+            yDragStartDomain = currentScaleY.domain() as [number, number];
+        }).on("drag", (e) => {
+            if (!yDragStartDomain) return;
+            // Calculate scale factor based on drag distance
+            const factor = Math.exp(-e.dy * 0.01);
+            const cy = currentScaleY.invert(chartHeight / 2);
+            const dMin = cy - (cy - yDragStartDomain[0]) * factor;
+            const dMax = cy + (yDragStartDomain[1] - cy) * factor;
 
-                drawCandles(currentScaleX, currentScaleY);
-                updateAxes(currentScaleX, currentScaleY);
-                updateGrid(currentScaleX, currentScaleY);
-            });
+            yDragStartDomain = [dMin, dMax];
+            currentScaleY.domain(yDragStartDomain);
+            setYScale(() => currentScaleY);
+            drawCandles(currentScaleX, currentScaleY);
+            updateAxes(currentScaleX, currentScaleY);
+            updateGrid(currentScaleX, currentScaleY);
+        });
 
         yAxisGroup
             .style("cursor", "ns-resize")
-            .call(yAxisZoom as any)
             .on("dblclick", () => {
                 // Double click to reset auto pricing
                 isAutoPricedRef.current = true;
@@ -426,16 +595,28 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             .attr("width", margin.right).attr("height", chartHeight)
             .attr("fill", "transparent");
 
-        svg.call(zoom as any);
+        // Apply Interaction Call-Bindings ONLY ONCE
+        if (!isInteractionsBoundRef.current) {
+            svg.call(zoom as any);
+            yAxisGroup.call(yAxisZoom as any);
+            isInteractionsBoundRef.current = true;
+        }
 
-        // Restore previous zoom state
+        // Configure best fit "TradingView-like" initial zoom (last ~120 candles with right padding)
+        const visibleCandlesCount = Math.max(1, Math.min(120, candles.length));
+        const k = Math.max(1, candles.length / visibleCandlesCount);
+        const rightPadding = Math.min(15, Math.floor(visibleCandlesCount * 0.15));
+        const focusIndex = candles.length - 1 + rightPadding;
+        const tx = chartWidth - k * x(focusIndex);
+        defaultTransformRef.current = d3.zoomIdentity.translate(tx, 0).scale(k);
+
+        // Restore previous zoom state if dragging/panning history was occurring
         if (transformRef.current !== d3.zoomIdentity) {
-            svg.call(zoom.transform, transformRef.current);
+            // Apply silently without firing another zoom event during rendering
+            zoom.transform(svg as any, transformRef.current);
         } else {
-            // Initial draw if no zoom state
-            drawCandles(x, y);
-            updateAxes(x, y);
-            updateGrid(x, y);
+            // Auto applies initial custom transform natively 
+            zoom.transform(svg as any, defaultTransformRef.current);
         }
 
         // Draw LTP Line (Re-added definition)
@@ -853,7 +1034,13 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             </ContextMenu.Trigger>
             <ContextMenu.Portal>
                 <ContextMenu.Content className="min-w-[200px] bg-white dark:bg-[#1e222d] border border-gray-200 dark:border-[#363a45] rounded shadow-2xl z-50 p-1 animate-in fade-in slide-in-from-right-1">
-                    <ContextItem label="Reset Viewport" icon={<RotateCcw size={14} />} shortcut="Alt+R" onClick={() => window.location.reload()} />
+                    <ContextItem label="Reset Viewport" icon={<RotateCcw size={14} />} shortcut="Alt+R" onClick={() => {
+                        if (svgRef.current && zoomBehaviorRef.current) {
+                            isAutoPricedRef.current = true;
+                            transformRef.current = defaultTransformRef.current;
+                            d3.select(svgRef.current).transition().duration(500).call(zoomBehaviorRef.current.transform, defaultTransformRef.current);
+                        }
+                    }} />
                     <ContextMenu.Separator className="h-[1px] bg-gray-100 dark:bg-[#363a45] my-1" />
                     <ContextItem label="Remove Indicators" icon={< EyeOff size={14} />} onClick={() => { }} />
                     <ContextItem label="Remove Drawings" icon={<Trash2 size={14} />} onClick={() => { setDrawings([]); setSelectedId(null); }} />

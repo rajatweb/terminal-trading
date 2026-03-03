@@ -14,8 +14,9 @@ import {
     Settings2,
     Activity,
     Eye,
+    Layers
 } from 'lucide-react';
-import { ChartSettings } from '@/types/chart';
+import { ChartSettings, DEFAULT_CHART_SETTINGS } from '@/types/chart';
 import { HexColorPicker } from 'react-colorful';
 import * as Popover from '@radix-ui/react-popover';
 
@@ -26,7 +27,7 @@ interface ChartSettingsModalProps {
     onUpdate: (settings: ChartSettings) => void;
 }
 
-type TabType = 'symbol' | 'appearance' | 'scales';
+type TabType = 'symbol' | 'appearance' | 'scales' | 'indicators';
 
 export const ChartSettingsModal: React.FC<ChartSettingsModalProps> = ({
     open,
@@ -37,15 +38,24 @@ export const ChartSettingsModal: React.FC<ChartSettingsModalProps> = ({
     const [activeTab, setActiveTab] = useState<TabType>('symbol');
 
     const updateSymbol = (updates: Partial<ChartSettings['symbol']>) => {
-        onUpdate({ ...settings, symbol: { ...settings.symbol, ...updates } });
+        onUpdate({ ...settings, symbol: { ...(settings.symbol || DEFAULT_CHART_SETTINGS.symbol), ...updates } });
     };
 
     const updateAppearance = (updates: Partial<ChartSettings['appearance']>) => {
-        onUpdate({ ...settings, appearance: { ...settings.appearance, ...updates } });
+        onUpdate({ ...settings, appearance: { ...(settings.appearance || DEFAULT_CHART_SETTINGS.appearance), ...updates } });
     };
 
     const updateScales = (updates: Partial<ChartSettings['scales']>) => {
-        onUpdate({ ...settings, scales: { ...settings.scales, ...updates } });
+        onUpdate({ ...settings, scales: { ...(settings.scales || DEFAULT_CHART_SETTINGS.scales), ...updates } });
+    };
+
+    const updateIndicators = (updates: Partial<ChartSettings['indicators']>) => {
+        onUpdate({ ...settings, indicators: { ...(settings.indicators || DEFAULT_CHART_SETTINGS.indicators), ...updates } });
+    };
+
+    const updateAdr = (updates: Partial<ChartSettings['indicators']['adr']>) => {
+        const currentIndicators = settings.indicators || DEFAULT_CHART_SETTINGS.indicators;
+        updateIndicators({ adr: { ...(currentIndicators.adr || DEFAULT_CHART_SETTINGS.indicators.adr), ...updates } });
     };
 
     return (
@@ -80,6 +90,7 @@ export const ChartSettingsModal: React.FC<ChartSettingsModalProps> = ({
                                 <TabButton active={activeTab === 'symbol'} onClick={() => setActiveTab('symbol')} icon={<Activity size={16} />} label="Symbol" />
                                 <TabButton active={activeTab === 'appearance'} onClick={() => setActiveTab('appearance')} icon={<Palette size={16} />} label="Appearance" />
                                 <TabButton active={activeTab === 'scales'} onClick={() => setActiveTab('scales')} icon={<Type size={16} />} label="Scales" />
+                                <TabButton active={activeTab === 'indicators'} onClick={() => setActiveTab('indicators')} icon={<Layers size={16} />} label="Indicators" />
                             </div>
 
                             {/* Content Area */}
@@ -215,6 +226,54 @@ export const ChartSettingsModal: React.FC<ChartSettingsModalProps> = ({
                                                         onChange={(e) => updateScales({ fontSize: parseInt(e.target.value) })}
                                                         className="w-full h-1 bg-gray-200 dark:bg-gray-800 rounded-lg appearance-none cursor-pointer accent-blue-600"
                                                     />
+                                                </div>
+                                            </div>
+                                        </section>
+                                    </div>
+                                )}
+
+                                {activeTab === 'indicators' && (
+                                    <div className="space-y-6 animate-in fade-in slide-in-from-right-1 duration-200">
+                                        <section className="space-y-4">
+                                            <div className="flex items-center gap-2">
+                                                <div className="w-1 h-3 bg-blue-500 rounded-full" />
+                                                <h3 className="text-[11px] font-black uppercase tracking-wider text-gray-500 dark:text-[#787b86]">ADRx3 Indicator</h3>
+                                            </div>
+                                            <div className="space-y-4">
+                                                <div className="p-3 bg-gray-50 dark:bg-black/10 rounded-lg border border-gray-100 dark:border-[#363a45] space-y-4">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-[12px] font-bold text-gray-600 dark:text-[#d1d4dc]">ADR 1 Period</label>
+                                                        <input
+                                                            type="number"
+                                                            value={settings.indicators?.adr?.p1 ?? DEFAULT_CHART_SETTINGS.indicators.adr.p1}
+                                                            onChange={(e) => updateAdr({ p1: parseInt(e.target.value) || 1 })}
+                                                            className="w-16 h-8 bg-white dark:bg-[#131722] border border-gray-200 dark:border-[#363a45] rounded px-2 text-[12px] font-bold text-blue-500 outline-none focus:border-blue-500 transition-colors"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-[12px] font-bold text-gray-600 dark:text-[#d1d4dc]">ADR 2 Period</label>
+                                                        <input
+                                                            type="number"
+                                                            value={settings.indicators?.adr?.p2 ?? DEFAULT_CHART_SETTINGS.indicators.adr.p2}
+                                                            onChange={(e) => updateAdr({ p2: parseInt(e.target.value) || 1 })}
+                                                            className="w-16 h-8 bg-white dark:bg-[#131722] border border-gray-200 dark:border-[#363a45] rounded px-2 text-[12px] font-bold text-blue-500 outline-none focus:border-blue-500 transition-colors"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-[12px] font-bold text-gray-600 dark:text-[#d1d4dc]">Level 2 Multiplier</label>
+                                                        <input
+                                                            type="number"
+                                                            step="0.05"
+                                                            value={settings.indicators?.adr?.mult2 ?? DEFAULT_CHART_SETTINGS.indicators.adr.mult2}
+                                                            onChange={(e) => updateAdr({ mult2: parseFloat(e.target.value) || 0.1 })}
+                                                            className="w-16 h-8 bg-white dark:bg-[#131722] border border-gray-200 dark:border-[#363a45] rounded px-2 text-[12px] font-bold text-blue-500 outline-none focus:border-blue-500 transition-colors"
+                                                        />
+                                                    </div>
+                                                </div>
+
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <ProToggle label="Show Labels" checked={settings.indicators?.adr?.showLabels ?? DEFAULT_CHART_SETTINGS.indicators.adr.showLabels} onChange={(v) => updateAdr({ showLabels: v })} />
+                                                    <ProToggle label="Secondary Levels" checked={settings.indicators?.adr?.showSecondary ?? DEFAULT_CHART_SETTINGS.indicators.adr.showSecondary} onChange={(v) => updateAdr({ showSecondary: v })} />
                                                 </div>
                                             </div>
                                         </section>

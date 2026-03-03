@@ -6,6 +6,7 @@ import { soundManager } from '../stores/sound';
 import { BrokerName, DhanConfig, GrowwConfig } from '@/types/broker';
 import { WatchlistGroup, OptionStrike, OrderModalState, WatchlistItem } from '@/types/terminal';
 import { getSymbolConfig, SYMBOL_MAP } from '@/lib/dhan/symbols';
+import { ChartSettings, DEFAULT_CHART_SETTINGS } from '@/types/chart';
 
 
 // ============================================
@@ -188,6 +189,12 @@ export const getInstrumentDetails = (symbol: string, segment: string) => {
     };
 };
 
+export interface TerminalSettings {
+    interval: string;
+    fromDate: string;
+    toDate: string;
+}
+
 // ============================================
 // STORE INTERFACE
 // ============================================
@@ -299,6 +306,14 @@ interface TradingStore {
     openOrderModal: (config: Omit<OrderModalState, 'isOpen'>) => void;
     closeOrderModal: () => void;
     fetchOptionChain: (expiry?: string) => Promise<void>;
+
+    // Terminal Settings
+    terminalSettings: TerminalSettings;
+    updateTerminalSettings: (settings: Partial<TerminalSettings>) => void;
+
+    // Chart Settings
+    chartSettings: ChartSettings;
+    updateChartSettings: (settings: Partial<ChartSettings>) => void;
 }
 
 
@@ -487,6 +502,36 @@ export const useTradingStore = create<TradingStore>()(
             dhanConfig: null,
             growwConfig: null,
             isAuthenticated: false,
+
+            terminalSettings: {
+                interval: '1m',
+                fromDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                toDate: new Date().toISOString().split('T')[0],
+            },
+
+            updateTerminalSettings: (settings: Partial<TerminalSettings>) => set((state) => ({
+                terminalSettings: { ...state.terminalSettings, ...settings }
+            })),
+
+            chartSettings: DEFAULT_CHART_SETTINGS,
+
+            updateChartSettings: (updates: Partial<ChartSettings>) => set((state) => ({
+                chartSettings: {
+                    ...state.chartSettings,
+                    ...updates,
+                    symbol: updates.symbol ? { ...state.chartSettings.symbol, ...updates.symbol } : state.chartSettings.symbol,
+                    appearance: updates.appearance ? { ...state.chartSettings.appearance, ...updates.appearance } : state.chartSettings.appearance,
+                    scales: updates.scales ? { ...state.chartSettings.scales, ...updates.scales } : state.chartSettings.scales,
+                    indicators: updates.indicators ? {
+                        ...(state.chartSettings.indicators || DEFAULT_CHART_SETTINGS.indicators),
+                        ...updates.indicators,
+                        adr: updates.indicators.adr ? {
+                            ...((state.chartSettings.indicators?.adr) || DEFAULT_CHART_SETTINGS.indicators.adr),
+                            ...updates.indicators.adr
+                        } : (state.chartSettings.indicators?.adr || DEFAULT_CHART_SETTINGS.indicators.adr)
+                    } : state.chartSettings.indicators,
+                }
+            })),
 
 
 
@@ -1500,7 +1545,7 @@ export const useTradingStore = create<TradingStore>()(
                         newWatchlists = [...newWatchlists, dhanWatchlist];
                     }
 
-                                        return {
+                    return {
                         brokerCredentials: { clientId, accessToken },
                         dhanConfig: { clientId, accessToken },
                         activeBroker: 'dhan',
@@ -1867,7 +1912,9 @@ export const useTradingStore = create<TradingStore>()(
                 account: state.account,
                 brokerCredentials: state.brokerCredentials,
                 isConnected: state.isConnected,
-                lastSettlementDate: state.lastSettlementDate
+                lastSettlementDate: state.lastSettlementDate,
+                terminalSettings: state.terminalSettings,
+                chartSettings: state.chartSettings
             })
         }
     )

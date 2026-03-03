@@ -5,6 +5,11 @@ export interface OHLCV {
     low: number;
     close: number;
     volume: number;
+    adr?: any;
+    ema20?: number;
+    ema50?: number;
+    ema200?: number;
+    avgVol?: number;
 }
 
 export interface ChartDimensions {
@@ -91,6 +96,16 @@ export interface ChartSettings {
         textColor: string;
         fontSize: number;
     };
+    indicators: {
+        adr: {
+            p1: number;
+            p2: number;
+            mult2: number;
+            showLabels: boolean;
+            showHistory: boolean;
+            showSecondary: boolean;
+        }
+    };
 }
 
 export const DEFAULT_CHART_SETTINGS: ChartSettings = {
@@ -117,5 +132,15 @@ export const DEFAULT_CHART_SETTINGS: ChartSettings = {
     scales: {
         textColor: '#9ca3af',
         fontSize: 11,
+    },
+    indicators: {
+        adr: {
+            p1: 14,
+            p2: 7,
+            mult2: 0.25,
+            showLabels: true,
+            showHistory: false,
+            showSecondary: true,
+        }
     }
 };
