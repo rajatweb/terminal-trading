@@ -82,6 +82,7 @@ export interface ZenithTerminalProps {
     toDate?: string;
     onFromDateChange?: (date: string) => void;
     onToDateChange?: (date: string) => void;
+    onResetDateRange?: () => void;
 }
 
 const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
@@ -100,6 +101,7 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
     toDate,
     onFromDateChange,
     onToDateChange,
+    onResetDateRange,
 }) => {
     const [activeTool, setActiveTool] = useState<string>("cursor");
     const { theme, setTheme } = useTheme();
@@ -318,6 +320,14 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                     className="h-8 px-2 bg-transparent border border-transparent hover:bg-muted focus:bg-muted focus:border-border rounded outline-none cursor-pointer transition-all"
                                     title="To Date"
                                 />
+                                <Tip text="Reset to Default (Last 90 Days)">
+                                    <button
+                                        onClick={() => onResetDateRange?.()}
+                                        className="p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all ml-1"
+                                    >
+                                        <Clock size={14} />
+                                    </button>
+                                </Tip>
                             </div>
                         </div>
 

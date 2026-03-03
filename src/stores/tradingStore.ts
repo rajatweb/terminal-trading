@@ -505,8 +505,12 @@ export const useTradingStore = create<TradingStore>()(
 
             terminalSettings: {
                 interval: '1m',
-                fromDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                toDate: new Date().toISOString().split('T')[0],
+                fromDate: (() => {
+                    const d = new Date();
+                    d.setDate(d.getDate() - 60);
+                    return d.toLocaleDateString('en-CA');
+                })(),
+                toDate: new Date().toLocaleDateString('en-CA'),
             },
 
             updateTerminalSettings: (settings: Partial<TerminalSettings>) => set((state) => ({

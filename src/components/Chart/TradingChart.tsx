@@ -114,6 +114,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             setIsReplayActive(false);
             setReplayIndex(-1);
             setIsReplayPlaying(false);
+            // Reset zoom transform to identity so it re-calculates default zoom (last 120 candles)
+            transformRef.current = d3.zoomIdentity;
+            isAutoPricedRef.current = true;
         }
     }, [data]);
 
@@ -495,41 +498,52 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             if (!adrSettings.enabled) {
                 indicatorGroup.selectAll("*").remove();
             } else {
-                const definedAdr = (key: string) => (d: OHLCV) => typeof d.adr?.[key] === 'number' && d.adr[key] > 0;
-                const yAdr = (key: string) => (d: OHLCV) => sy(d.adr[key] as number);
+                // Pre-process displayCandles to identify session breaks
+                const adrDataWithBreaks: any[] = [];
+                displayCandles.forEach((c, i) => {
+                    if (i > 0) {
+                        const pD = new Date(displayCandles[i - 1].time * 1000).toDateString();
+                        const cD = new Date(c.time * 1000).toDateString();
+                        if (pD !== cD) adrDataWithBreaks.push(null);
+                    }
+                    adrDataWithBreaks.push({ ...c, absIdx: i });
+                });
+
+                const definedAdr = (key: string) => (d: any) => d && d.adr && typeof d.adr[key] === 'number' && d.adr[key] > 0;
+                const yAdr = (key: string) => (d: any) => sy(d.adr[key]);
 
                 // Area generators for the colored zones
-                const areaHigh = d3.area<OHLCV>()
+                const areaHigh = d3.area<any>()
                     .defined(d => definedAdr('adr1h')(d) && definedAdr('adr2h')(d))
-                    .x((d, i) => sx(i))
+                    .x(d => sx(d.absIdx))
                     .y0(yAdr('adr1h'))
                     .y1(yAdr('adr2h'));
 
-                const areaLow = d3.area<OHLCV>()
+                const areaLow = d3.area<any>()
                     .defined(d => definedAdr('adr1l')(d) && definedAdr('adr2l')(d))
-                    .x((d, i) => sx(i))
+                    .x(d => sx(d.absIdx))
                     .y0(yAdr('adr1l'))
                     .y1(yAdr('adr2l'));
 
                 // Plot Resistance Zone (Highs)
-                indicatorGroup.selectAll(".area-r-zone").data([displayCandles]).join("path").attr("class", "area-r-zone")
+                indicatorGroup.selectAll(".area-r-zone").data([adrDataWithBreaks]).join("path").attr("class", "area-r-zone")
                     .attr("d", areaHigh as any)
                     .attr("fill", "#ef4444")
                     .attr("fill-opacity", 0.08);
 
                 // Plot Support Zone (Lows)
-                indicatorGroup.selectAll(".area-s-zone").data([displayCandles]).join("path").attr("class", "area-s-zone")
+                indicatorGroup.selectAll(".area-s-zone").data([adrDataWithBreaks]).join("path").attr("class", "area-s-zone")
                     .attr("d", areaLow as any)
                     .attr("fill", "#10b981")
                     .attr("fill-opacity", 0.08);
 
-                const buildLine = (key: string) => d3.line<OHLCV>()
+                const buildLine = (key: string) => d3.line<any>()
                     .defined(definedAdr(key))
-                    .x((d, i) => sx(i))
+                    .x(d => sx(d.absIdx))
                     .y(yAdr(key));
 
                 // Mid line
-                indicatorGroup.selectAll(".line-mid").data([displayCandles]).join("path").attr("class", "line-mid")
+                indicatorGroup.selectAll(".line-mid").data([adrDataWithBreaks]).join("path").attr("class", "line-mid")
                     .attr("d", buildLine('open') as any)
                     .attr("fill", "none")
                     .attr("stroke", "#9ca3af")
@@ -541,7 +555,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                     { key: 'adr1h', color: '#ef4444', label: 'R1' }, { key: 'adr2h', color: '#ef4444', label: 'R2' },
                     { key: 'adr1l', color: '#10b981', label: 'S1' }, { key: 'adr2l', color: '#10b981', label: 'S2' }
                 ].forEach(lineConf => {
-                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([displayCandles]).join("path").attr("class", `line-${lineConf.key}`)
+                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([adrDataWithBreaks]).join("path").attr("class", `line-${lineConf.key}`)
                         .attr("d", buildLine(lineConf.key) as any)
                         .attr("fill", "none")
                         .attr("stroke", lineConf.color)
@@ -576,7 +590,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 }
 
                 outlierData.forEach(lineConf => {
-                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([displayCandles]).join("path").attr("class", `line-${lineConf.key}`)
+                    indicatorGroup.selectAll(`.line-${lineConf.key}`).data([adrDataWithBreaks]).join("path").attr("class", `line-${lineConf.key}`)
                         .attr("d", buildLine(lineConf.key) as any)
                         .attr("fill", "none")
                         .attr("stroke", lineConf.color)
@@ -993,11 +1007,6 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         <ContextMenu.Root>
             <ContextMenu.Trigger className="w-full h-full">
                 <div ref={containerRef} className="w-full h-full relative group select-none" style={{ backgroundColor: colors.bg }}>
-                    {isLoading && (
-                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
-                            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                        </div>
-                    )}
 
                     {/* Professional Background Watermark */}
                     {symbol && chartSettings.appearance.watermarkVisible && (

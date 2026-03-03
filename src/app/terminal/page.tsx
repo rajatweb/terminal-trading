@@ -173,25 +173,7 @@ export default function Home() {
         const { p1, p2, mult2 } = adrConf;
         const enrichedData = calculateADRx2(validCandles, p1, p2, mult2);
 
-        // Trim back the 20-day buffer from the view exactly to the user's requested finalFromDate
-        const requestedStartTs = new Date(finalFromDate).getTime();
-
-        // Note: some indicator logic depends on daily mapping, so trimming here doesn't break values already mapped to candles
-        let trimmedData = enrichedData;
-        if (enrichedData.length > 0) {
-          // Finding index of first candle that falls on or after finalFromDate
-          // fallback timestamp keys are handled in the API response format
-          const startIndex = enrichedData.findIndex((c: any) => {
-            const candleTs = c.time * 1000; // API usually feeds epoch seconds but lets guarantee Date comparison natively
-            return c.time.toString().includes('-') ? new Date(c.time).getTime() >= requestedStartTs : new Date(c.time * 1000).getTime() >= requestedStartTs;
-          });
-
-          if (startIndex !== -1) {
-            trimmedData = enrichedData.slice(startIndex);
-          }
-        }
-
-        setData(trimmedData as any);
+        setData(enrichedData as any);
       } else {
         console.warn("No data returned from Dhan API. Reason:", json.error || "Unknown");
         setData([]);
@@ -223,6 +205,16 @@ export default function Home() {
   const handleToDateChange = React.useCallback((date: string) => {
     setToDate(date);
     updateTerminalSettings({ toDate: date });
+  }, [updateTerminalSettings]);
+
+  const handleResetDateRange = React.useCallback(() => {
+    const to = new Date().toLocaleDateString('en-CA');
+    const d = new Date();
+    d.setDate(d.getDate() - 60);
+    const from = d.toLocaleDateString('en-CA');
+    setFromDate(from);
+    setToDate(to);
+    updateTerminalSettings({ fromDate: from, toDate: to });
   }, [updateTerminalSettings]);
 
   // Initial fetch when auth changes or mount
@@ -257,6 +249,7 @@ export default function Home() {
       toDate={toDate}
       onFromDateChange={handleFromDateChange}
       onToDateChange={handleToDateChange}
+      onResetDateRange={handleResetDateRange}
       headerTitle="Institutional Suite"
     />
   );
