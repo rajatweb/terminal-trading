@@ -1,0 +1,18 @@
+services:
+  nextjs:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "7000:7000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run start
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.next.rule=Host(`trade.rajatweb.com`)"
+      - "traefik.http.routers.next.entrypoints=websecure"
+      - "traefik.http.routers.next.tls=true"
+      - "traefik.http.services.next.loadbalancer.server.port=7000"
