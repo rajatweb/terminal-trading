@@ -2,17 +2,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTradingStore, getLotSize } from "@/stores/tradingStore";
 import { X, AlertTriangle, ShieldCheck, Zap } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const OrderModal: React.FC = () => {
-    const { orderModal, closeOrderModal, placeOrder, marginAvailable } = useTerminalStore();
-    const { isOpen, symbol, type, instrumentType, price: initialPrice, ltp } = orderModal;
+    const { orderModal, closeOrderModal } = useTradingStore();
+    const { placeOrder, account, getInstrumentDetails } = useTradingStore();
+    const { isOpen, symbol, type, instrumentType, price: initialPrice, ltp, securityId, segment } = orderModal;
 
-    const [product, setProduct] = useState<'CNC' | 'MIS' | 'NRML'>(instrumentType === 'OPTION' ? 'NRML' : 'CNC');
+    const lotSize = (symbol && segment) ? getLotSize(symbol, segment) : (instrumentType === 'OPTION' ? 50 : 1);
+    const [product, setProduct] = useState<'CNC' | 'MIS' | 'NRML'>(instrumentType === 'OPTION' ? 'NRML' : 'MIS');
     const [orderType, setOrderType] = useState<'MARKET' | 'LIMIT' | 'SL' | 'SL-M'>('MARKET');
-    const [qty, setQty] = useState<number>(instrumentType === 'OPTION' ? 50 : 1);
+    const [qty, setQty] = useState<number>(lotSize);
     const [price, setPrice] = useState<number>(initialPrice || ltp);
     const [triggerPrice, setTriggerPrice] = useState<number>(ltp);
 
@@ -178,7 +180,7 @@ export const OrderModal: React.FC = () => {
                                     </div>
                                     <div className="flex flex-col border-l border-border pl-4">
                                         <span className="text-muted-foreground uppercase tracking-widest leading-none mb-1">Available</span>
-                                        <span className="text-up tabular-nums font-black text-[14px]">₹{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                                        <span className="text-up tabular-nums font-black text-[14px]">₹{account.availableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                                     </div>
                                 </div>
                                 <div className="flex flex-col items-end">
@@ -191,14 +193,21 @@ export const OrderModal: React.FC = () => {
                             <button
                                 disabled={isIndex}
                                 onClick={() => {
+                                    if (!securityId || !segment) {
+                                        alert("Incomplete instrument data. Cannot place order.");
+                                        return;
+                                    }
                                     placeOrder({
+                                        securityId,
                                         symbol,
-                                        type,
-                                        instrumentType,
-                                        product,
+                                        side: type,
+                                        exchange: segment.split('_')[0] || 'NSE',
+                                        segment,
                                         orderType,
-                                        qty,
+                                        productType: product,
+                                        quantity: qty,
                                         price: orderType === 'MARKET' ? ltp : price,
+                                        triggerPrice: (orderType === 'SL' || orderType === 'SL-M') ? triggerPrice : undefined
                                     });
                                     closeOrderModal();
                                 }}

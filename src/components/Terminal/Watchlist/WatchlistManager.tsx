@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTradingStore } from "@/stores/tradingStore";
 import { Search, Plus, MoreVertical, Globe, ChevronDown, Activity, ListPlus, GripVertical, Trash2 } from "lucide-react";
 import { WatchlistItem, WatchlistGroup } from "@/types/terminal";
 import { SidebarAd } from "@/components/Ads/AdBanner";
@@ -10,8 +10,8 @@ import { SidebarAd } from "@/components/Ads/AdBanner";
 export const WatchlistManager: React.FC = () => {
     const {
         watchlists, activeWatchlistId, setActiveWatchlist, setSymbol, activeSymbol,
-        openOrderModal, addWatchlist, addSection, addToWatchlist, reorderWatchlist, removeFromWatchlist
-    } = useTerminalStore();
+        openOrderModal, addWatchlistGroup, addSection, addSymbolToWatchlist, reorderWatchlistGroup, removeSymbolFromWatchlist
+    } = useTradingStore();
 
     const activeGroup = watchlists.find(w => w.id === activeWatchlistId) || watchlists[0];
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -38,38 +38,51 @@ export const WatchlistManager: React.FC = () => {
 
     const handleDragEnd = () => {
         if (dragItem.current !== null && dragOverItem.current !== null) {
-            reorderWatchlist(dragItem.current, dragOverItem.current);
+            reorderWatchlistGroup(dragItem.current, dragOverItem.current);
         }
         dragItem.current = null;
         dragOverItem.current = null;
     };
 
-    // Mock Search Data
-    const SEARCH_DB = [
-        { symbol: 'TATAMOTORS', name: 'Tata Motors Ltd', price: 890.50, exchange: 'NSE' },
-        { symbol: 'SBIN', name: 'State Bank of India', price: 645.20, exchange: 'NSE' },
-        { symbol: 'INFY', name: 'Infosys Limited', price: 1650.00, exchange: 'NSE' },
-        { symbol: 'ITC', name: 'ITC Limited', price: 445.10, exchange: 'NSE' },
-        { symbol: 'BAJFINANCE', name: 'Bajaj Finance', price: 7200.00, exchange: 'NSE' },
-        { symbol: 'ADANIENT', name: 'Adani Enterprises', price: 3150.00, exchange: 'NSE' },
-        { symbol: 'MRF', name: 'MRF Ltd', price: 135000.00, exchange: 'NSE' },
-        { symbol: 'ZOMATO', name: 'Zomato Ltd', price: 145.00, exchange: 'NSE' },
-    ];
+    const [searchResults, setSearchResults] = useState<any[]>([]);
+    const [isSearching, setIsSearching] = useState(false);
 
-    const filteredSearch = SEARCH_DB.filter(s =>
-        s.symbol.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        s.name.toLowerCase().includes(searchQuery.toLowerCase())
-    );
+    React.useEffect(() => {
+        if (!searchQuery || searchQuery.length < 2) {
+            setSearchResults([]);
+            return;
+        }
 
-    const handleAddSymbol = (symbol: string, price: number) => {
-        addToWatchlist({
-            symbol,
-            price,
+        const fetchResults = async () => {
+            setIsSearching(true);
+            try {
+                const res = await fetch(`/api/dhan/instruments/search?q=${encodeURIComponent(searchQuery)}`);
+                const data = await res.json();
+                setSearchResults(data.results || []);
+            } catch (err) {
+                console.error("Search failed:", err);
+            } finally {
+                setIsSearching(false);
+            }
+        };
+
+        const timer = setTimeout(fetchResults, 300);
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+
+    const handleAddSymbol = (item: any) => {
+        addSymbolToWatchlist({
+            symbol: item.symbol,
+            price: 0,
             change: 0,
             changePercent: 0,
-            exchange: 'NSE',
+            exchange: item.exchange,
+            description: item.name,
             isUp: true,
-            type: 'SYMBOL'
+            type: 'SYMBOL',
+            securityId: item.securityId,
+            segment: item.segment,
+            instrumentType: item.segment === 'NSE_EQ' ? 'EQUITY' : (item.segment === 'IDX_I' ? 'INDEX' : 'OPTION')
         });
         setIsSearchOpen(false);
         setSearchQuery("");
@@ -78,7 +91,7 @@ export const WatchlistManager: React.FC = () => {
     const handleCreateList = () => {
         if (newListName.trim()) {
             const id = newListName.toLowerCase().replace(/\s+/g, '-');
-            addWatchlist({
+            addWatchlistGroup({
                 id,
                 name: newListName,
                 items: []
@@ -220,15 +233,20 @@ export const WatchlistManager: React.FC = () => {
                     )}
 
                     <div className="flex-1 overflow-y-auto space-y-1">
-                        {filteredSearch.map(s => (
+                        {isSearching && (
+                            <div className="flex items-center justify-center py-8">
+                                <Activity className="animate-spin text-primary" size={24} />
+                            </div>
+                        )}
+                        {!isSearching && searchResults.map(s => (
                             <div
-                                key={s.symbol}
-                                onClick={() => handleAddSymbol(s.symbol, s.price)}
+                                key={`${s.securityId}-${s.exchange}`}
+                                onClick={() => handleAddSymbol(s)}
                                 className="flex items-center justify-between p-3 hover:bg-muted rounded-md cursor-pointer group"
                             >
                                 <div>
                                     <div className="text-[12px] font-black text-foreground">{s.symbol}</div>
-                                    <div className="text-[10px] text-muted-foreground">{s.name}</div>
+                                    <div className="text-[10px] text-muted-foreground line-clamp-1">{s.name}</div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <span className="text-[10px] font-bold bg-muted px-1.5 py-0.5 rounded">{s.exchange}</span>
@@ -266,7 +284,7 @@ export const WatchlistManager: React.FC = () => {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        removeFromWatchlist(index);
+                                        removeSymbolFromWatchlist(index);
                                     }}
                                     className="p-1 hover:bg-destructive/10 hover:text-destructive rounded transition-colors text-muted-foreground"
                                 >
@@ -312,9 +330,11 @@ export const WatchlistManager: React.FC = () => {
                                         openOrderModal({
                                             symbol: item.symbol,
                                             type: 'BUY',
-                                            instrumentType: (item.symbol === 'NIFTY' || item.symbol === 'BANKNIFTY' || item.symbol.includes('NIFTY')) ? 'INDEX' : 'EQUITY',
-                                            price: item.price,
-                                            ltp: item.price
+                                            instrumentType: (item.symbol === 'NIFTY' || item.symbol === 'BANKNIFTY' || item.symbol.includes('NIFTY')) ? 'INDEX' : (item.instrumentType as any || 'EQUITY'),
+                                            price: item.price || 0,
+                                            ltp: item.price || 0,
+                                            securityId: item.securityId,
+                                            segment: item.segment
                                         });
                                     }}
                                     className="w-5 h-5 bg-blue-600 hover:bg-blue-700 text-white rounded text-[9px] font-black flex items-center justify-center transition-colors shadow-sm"
@@ -326,9 +346,11 @@ export const WatchlistManager: React.FC = () => {
                                         openOrderModal({
                                             symbol: item.symbol,
                                             type: 'SELL',
-                                            instrumentType: (item.symbol === 'NIFTY' || item.symbol === 'BANKNIFTY' || item.symbol.includes('NIFTY')) ? 'INDEX' : 'EQUITY',
-                                            price: item.price,
-                                            ltp: item.price
+                                            instrumentType: (item.symbol === 'NIFTY' || item.symbol === 'BANKNIFTY' || item.symbol.includes('NIFTY')) ? 'INDEX' : (item.instrumentType as any || 'EQUITY'),
+                                            price: item.price || 0,
+                                            ltp: item.price || 0,
+                                            securityId: item.securityId,
+                                            segment: item.segment
                                         });
                                     }}
                                     className="w-5 h-5 bg-rose-600 hover:bg-rose-700 text-white rounded text-[9px] font-black flex items-center justify-center transition-colors shadow-sm"
@@ -337,7 +359,7 @@ export const WatchlistManager: React.FC = () => {
                                 <button
                                     onClick={(e) => {
                                         e.stopPropagation();
-                                        removeFromWatchlist(index);
+                                        removeSymbolFromWatchlist(index);
                                     }}
                                     className="w-5 h-5 hover:bg-destructive/10 text-muted-foreground hover:text-destructive rounded flex items-center justify-center transition-colors"
                                     title="Remove"
@@ -348,7 +370,7 @@ export const WatchlistManager: React.FC = () => {
 
                             <div className="flex flex-col items-end">
                                 <span className="text-[13px] font-black font-mono text-foreground tabular-nums">
-                                    {item.price.toFixed(2)}
+                                    {(item.price || 0).toFixed(2)}
                                 </span>
                                 <div className="flex items-center gap-1.5">
                                     <span className={`text-[10px] font-black ${item.isUp ? "text-up" : "text-down"}`}>

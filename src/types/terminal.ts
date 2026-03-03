@@ -1,13 +1,24 @@
 
 export interface WatchlistItem {
     symbol: string;
-    price: number;
+    price?: number;
+    ltp?: number;
     change: number;
     changePercent: number;
     exchange: string;
     description?: string;
-    isUp: boolean;
+    isUp?: boolean;
     type?: 'SYMBOL' | 'SECTION';
+    securityId?: string;
+    segment?: string;
+    instrumentType?: string;
+    prevClose?: number;
+    open?: number;
+    high?: number;
+    low?: number;
+    volume?: number;
+    ltt?: number;
+    isIndex?: boolean;
 }
 
 export interface WatchlistGroup {
@@ -77,10 +88,14 @@ export interface OrderModalState {
     instrumentType: 'EQUITY' | 'OPTION' | 'INDEX';
     price: number;
     ltp: number;
+    securityId?: string;
+    segment?: string;
 }
 
 export interface TerminalState {
     activeSymbol: string;
+    activeExpiry: string;
+    expiries: string[];
     activeWatchlistId: string;
     watchlists: WatchlistGroup[];
     positions: Position[];

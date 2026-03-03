@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import Link from 'next/link';
 import TradingChart from "./TradingChart";
 import { OHLCV } from "@/types/chart";
 import { useTheme } from "next-themes";
@@ -39,6 +40,9 @@ import {
     Unlock,
     Command,
     CircleHelp,
+    Newspaper,
+    RotateCcw,
+    Zap,
 } from "lucide-react";
 
 import { AppTour, TourStep } from "../Tour/AppTour";
@@ -47,9 +51,11 @@ import { WatchlistManager } from "../Terminal/Watchlist/WatchlistManager";
 import { OptionChain } from "../Terminal/OptionChain/OptionChain";
 import { PositionsPanel } from "../Terminal/Dashboard/PositionsTable";
 import { OrderModal } from "../Terminal/OrderModal";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTradingStore } from "@/stores/tradingStore";
 import { AdBanner, SidebarAd } from "../Ads/AdBanner";
 import { WatchlistItem as StoreWatchlistItem, Position, OptionStrike } from "@/types/terminal";
+import { BrokerConnectModal } from "../Terminal/BrokerConnectModal";
+import { useMarketFeed } from "@/stores/useMarketFeed";
 
 export interface WatchlistItem {
     symbol: string;
@@ -71,6 +77,11 @@ export interface ZenithTerminalProps {
     isLoading?: boolean;
     headerTitle?: string;
     headerLogo?: React.ReactNode;
+    livePrice?: number;
+    fromDate?: string;
+    toDate?: string;
+    onFromDateChange?: (date: string) => void;
+    onToDateChange?: (date: string) => void;
 }
 
 const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
@@ -85,11 +96,19 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
     isLoading = false,
     headerTitle = "Institutional Suite",
     headerLogo,
+    fromDate,
+    toDate,
+    onFromDateChange,
+    onToDateChange,
 }) => {
     const [activeTool, setActiveTool] = useState<string>("cursor");
     const { theme, setTheme } = useTheme();
     const [mounted, setMounted] = useState(false);
-    const { activeSymbol, setSymbol, watchlists, addWatchlist, setPositions, updateOptionChain } = useTerminalStore();
+    const { activeSymbol, setSymbol, activeWatchlistId, watchlists, addWatchlistGroup, updateOptionChain, activeBroker, isAuthenticated, disconnectBroker, dhanConfig } = useTradingStore();
+    const { feedStatus } = useTradingStore();
+
+    // Initialize the market feed (syncs with tradingStore)
+    useMarketFeed();
 
     // Layout State
     const [showWatchlist, setShowWatchlist] = useState(true);
@@ -98,16 +117,28 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
 
     // Tour State
     const [isTourOpen, setIsTourOpen] = useState(false);
+    const [isBrokerModalOpen, setIsBrokerModalOpen] = useState(false);
 
     useEffect(() => {
         setMounted(true);
     }, []);
 
-    useEffect(() => {
-        if (symbol) setSymbol(symbol);
+    // Option Chain Sync
 
-        // Sync positions and option chain if provided
-        if (positions.length > 0) setPositions(positions);
+    const fetchOptionChain = useTradingStore(state => state.fetchOptionChain);
+    const lastFetchedSymbol = React.useRef<string>("");
+
+    useEffect(() => {
+        if (isAuthenticated && activeSymbol && activeSymbol !== lastFetchedSymbol.current) {
+            fetchOptionChain();
+            lastFetchedSymbol.current = activeSymbol;
+        }
+    }, [isAuthenticated, activeSymbol, fetchOptionChain]);
+
+    useEffect(() => {
+        if (symbol && symbol !== activeSymbol) setSymbol(symbol);
+
+        // Sync option chain if provided
         if (optionChain.length > 0) updateOptionChain(optionChain);
 
         // Seed watchlist from props if provided and not already present
@@ -124,9 +155,36 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                     isUp: item.isUp
                 }))
             };
-            addWatchlist(externalGroup);
+            addWatchlistGroup(externalGroup);
         }
-    }, [symbol, setSymbol, watchlist, watchlists, addWatchlist, positions, optionChain, setPositions, updateOptionChain]);
+    }, [symbol, setSymbol, watchlist, watchlists, addWatchlistGroup, positions, optionChain, updateOptionChain]);
+
+    // Sync active watchlist to Trading Store for live updates
+    useEffect(() => {
+        if (!isAuthenticated) return;
+
+        const activeGroup = watchlists.find(w => w.id === activeWatchlistId);
+        if (!activeGroup) return;
+
+        const tradingStore = useTradingStore.getState();
+        activeGroup.items.forEach(item => {
+            if (item.securityId && item.segment) {
+                const alreadyExists = tradingStore.watchlist.some(w => w.securityId === item.securityId);
+                if (!alreadyExists) {
+                    tradingStore.addToWatchlist({
+                        securityId: item.securityId,
+                        symbol: item.symbol,
+                        exchange: (item.exchange === 'NSE' || item.exchange === 'BSE' || item.exchange === 'MCX') ? item.exchange : 'NSE' as any,
+                        segment: item.segment,
+                        ltp: item.price as number,
+                        change: item.change as number,
+                        changePercent: item.changePercent as number,
+                        isIndex: item.instrumentType === 'INDEX'
+                    });
+                }
+            }
+        });
+    }, [activeWatchlistId, watchlists, isAuthenticated]);
 
     // Handle Tour Step Changes to open panels
     const handleTourStepChange = (stepIndex: number) => {
@@ -203,20 +261,22 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                     <div className="flex items-center h-full divide-x divide-border">
                         {/* Logo & Symbol Selector */}
                         <div
-                            className="flex items-center gap-2 pr-3 pl-1 group cursor-pointer h-full hover:bg-muted transition-colors"
+                            className="flex items-center gap-2 pr-4 pl-2 group cursor-pointer h-full hover:bg-muted transition-colors border-r border-border"
                         >
-                            {headerLogo || (
-                                <div className="w-7 h-7 bg-blue-600 rounded-lg flex items-center justify-center text-white font-black text-xs">Z</div>
-                            )}
-
-                            <div className="flex flex-col leading-none">
-                                <span className="font-bold text-[13px] tracking-tight text-foreground uppercase">{activeSymbol}</span>
-                                <span className="text-[9px] font-medium text-muted-foreground group-hover:text-primary transition-colors uppercase">{headerTitle}</span>
+                            <div className="flex items-center gap-2">
+                                <span className={`w-2 h-2 rounded-full ${feedStatus === 'CONNECTED' ? 'bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]' :
+                                    feedStatus === 'CONNECTING' ? 'bg-amber-500 animate-pulse' :
+                                        feedStatus === 'ERROR' ? 'bg-rose-500' : 'bg-muted'
+                                    }`} title={`Feed Status: ${feedStatus}`} />
+                                <div className="flex flex-col leading-none">
+                                    <span className="font-bold text-[14px] tracking-tight text-foreground uppercase">{activeSymbol}</span>
+                                    <span className="text-[10px] font-black text-muted-foreground group-hover:text-primary transition-colors uppercase tracking-widest">
+                                        {feedStatus === 'CONNECTED' ? 'Live Feed' : feedStatus === 'CONNECTING' ? 'Connecting...' : 'Mock Feed'}
+                                    </span>
+                                </div>
                             </div>
-                            <ChevronDown size={14} className="text-muted-foreground ml-1" />
                         </div>
 
-                        {/* Intervals */}
                         <div className="flex items-center gap-1 px-3 h-full">
                             {["1m", "5m", "15m", "1h", "D"].map((interval) => (
                                 <button
@@ -230,6 +290,35 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                     {interval}
                                 </button>
                             ))}
+                            <div className="w-px h-6 bg-border mx-1" />
+                            <Tip text="Refresh Data">
+                                <button
+                                    onClick={() => onSymbolChange?.(activeSymbol)}
+                                    className="p-2 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-all active:rotate-180 duration-500"
+                                >
+                                    <RotateCcw size={14} />
+                                </button>
+                            </Tip>
+
+                            {/* Date Picker Range */}
+                            <div className="w-px h-6 bg-border mx-1" />
+                            <div className="flex items-center gap-2 px-2 text-[11px] font-semibold text-muted-foreground">
+                                <input
+                                    type="date"
+                                    value={fromDate || ""}
+                                    onChange={(e) => onFromDateChange?.(e.target.value)}
+                                    className="h-8 px-2 bg-transparent border border-transparent hover:bg-muted focus:bg-muted focus:border-border rounded outline-none cursor-pointer transition-all"
+                                    title="From Date"
+                                />
+                                <span className="text-border">to</span>
+                                <input
+                                    type="date"
+                                    value={toDate || ""}
+                                    onChange={(e) => onToDateChange?.(e.target.value)}
+                                    className="h-8 px-2 bg-transparent border border-transparent hover:bg-muted focus:bg-muted focus:border-border rounded outline-none cursor-pointer transition-all"
+                                    title="To Date"
+                                />
+                            </div>
                         </div>
 
                         {/* Dash Layout Controls */}
@@ -258,6 +347,14 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                     <Target size={16} />
                                 </button>
                             </Tip>
+                            <Tip text="Intelligence Hub (News)">
+                                <Link
+                                    href="/"
+                                    className="p-1.5 rounded transition-all text-muted-foreground hover:bg-primary/10 hover:text-primary"
+                                >
+                                    <Newspaper size={16} />
+                                </Link>
+                            </Tip>
                         </div>
                     </div>
 
@@ -284,10 +381,20 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                                 <span className="text-[10px] font-black text-muted-foreground uppercase tracking-widest">{theme}</span>
                             </div>
 
-                            <button className="flex items-center gap-2 px-5 py-1.5 bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg text-xs font-black shadow-lg transition-all active:scale-95">
+                            <button
+                                onClick={() => isAuthenticated ? disconnectBroker() : setIsBrokerModalOpen(true)}
+                                className={`flex items-center gap-2 px-5 py-1.5 ${isAuthenticated ? "bg-emerald-600 hover:bg-red-600" : "bg-primary hover:bg-primary/90"} text-white rounded-lg text-xs font-black shadow-lg transition-all active:scale-95 group`}
+                            >
                                 <Activity size={14} />
-                                <span>{isLoading ? "SYNCING..." : "TRADING TERMINAL"}</span>
-                                <ChevronDown size={14} className="opacity-50" />
+                                {isAuthenticated ? (
+                                    <>
+                                        <span className="group-hover:hidden uppercase">{activeBroker} CONNECTED</span>
+                                        <span className="hidden group-hover:block uppercase">DISCONNECT {activeBroker}</span>
+                                    </>
+                                ) : (
+                                    <span>{isLoading ? "SYNCING..." : "TRADING TERMINAL"}</span>
+                                )}
+                                {!isAuthenticated && <ChevronDown size={14} className="opacity-50" />}
                             </button>
                         </div>
                     </div>
@@ -343,6 +450,7 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                             <main id="terminal-chart" className="flex-1 relative bg-white dark:bg-[#131722] overflow-hidden">
                                 <TradingChart
                                     data={data}
+                                    isLoading={isLoading}
                                     activeTool={activeTool}
                                     symbol={activeSymbol}
                                     interval={activeInterval}
@@ -476,6 +584,11 @@ const ZenithTerminal: React.FC<ZenithTerminalProps> = ({
                     onClose={() => setIsTourOpen(false)}
                     onComplete={() => setIsTourOpen(false)}
                     onStepChange={handleTourStepChange}
+                />
+
+                <BrokerConnectModal
+                    isOpen={isBrokerModalOpen}
+                    onClose={() => setIsBrokerModalOpen(false)}
                 />
             </div>
             <OrderModal />

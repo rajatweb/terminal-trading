@@ -26,12 +26,16 @@ import {
     Type,
     Ruler,
     Layers,
-    ChevronDown
+    ChevronDown,
+    Activity
 } from "lucide-react";
 import DrawingToolbar from "./DrawingToolbar";
 import { DrawingRenderer } from "./drawings/DrawingRenderer";
 import { PreviewRenderer } from "./drawings/PreviewRenderer";
 import { ChartSettingsModal } from "./ChartSettingsModal";
+import { useTradingStore } from "@/stores/tradingStore";
+import { WatchlistItem as TradingWatchlistItem } from "@/types/terminal";
+import { getSymbolConfig } from "@/lib/dhan/symbols";
 
 interface TradingChartProps {
     data: OHLCV[];
@@ -39,9 +43,29 @@ interface TradingChartProps {
     symbol?: string;
     interval?: string;
     onToolComplete?: () => void;
+    isLoading?: boolean;
 }
 
-const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = "NIFTY", interval = "5m", onToolComplete }) => {
+const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = "NIFTY", interval = "1m", onToolComplete, isLoading }) => {
+    // Select the active symbol's item from tradingStore watchlist for live updates
+    const activeItem = useTradingStore(state =>
+        state.watchlist.find(item => item.symbol === symbol)
+    );
+
+    // Map activeItem to the familiar latestQuote structure for existing logic compatibility
+    const latestQuote = useMemo(() => {
+        if (!activeItem) return null;
+        return {
+            securityId: Number(activeItem.securityId),
+            ltp: activeItem.ltp,
+            ltt: Date.now(), // Fallback to now if ltt isn't precisely tracked in item
+            volume: activeItem.volume || 0,
+            open: activeItem.open || activeItem.ltp,
+            high: activeItem.high || activeItem.ltp,
+            low: activeItem.low || activeItem.ltp,
+            prevClose: activeItem.prevClose || activeItem.ltp
+        };
+    }, [activeItem]);
     const containerRef = useRef<HTMLDivElement>(null);
     const svgRef = useRef<SVGSVGElement>(null);
     const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
@@ -56,6 +80,103 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     const [hoveredCandle, setHoveredCandle] = useState<OHLCV | null>(null);
 
     const { theme, setTheme } = useTheme();
+
+    // Local state to maintain accumulated OHLC for live candles
+    const [candles, setCandles] = useState<OHLCV[]>(data || []);
+
+    // Sync state when historical data changes (symbol/interval change)
+    useEffect(() => {
+        if (data) {
+            setCandles(data);
+        }
+    }, [data]);
+
+    // Handle Real-time Updates
+    useEffect(() => {
+        if (!latestQuote || !symbol || candles.length === 0) return;
+
+        let securityId = "";
+        const staticConfig = getSymbolConfig(symbol);
+        if (staticConfig) {
+            securityId = staticConfig.id;
+        } else {
+            // Check watchlists for dynamic symbol
+            const state = useTradingStore.getState();
+            for (const group of state.watchlists) {
+                const item = group.items.find(i => i.symbol === symbol);
+                if (item?.securityId) {
+                    securityId = item.securityId;
+                    break;
+                }
+            }
+        }
+
+        if (!securityId || latestQuote.securityId.toString() !== securityId.toString()) return;
+
+        const ltp = latestQuote.ltp;
+        const ltt = latestQuote.ltt || Date.now();
+        if (ltp === undefined) return;
+
+        setCandles(prev => {
+            if (prev.length === 0) return prev;
+
+            const lastCandle = prev[prev.length - 1];
+
+            // Parse interval to seconds
+            let intervalSeconds = 300; // default 5m
+            if (interval === '1m') intervalSeconds = 60;
+            else if (interval === '5m') intervalSeconds = 300;
+            else if (interval === '15m') intervalSeconds = 900;
+            else if (interval === '1h') intervalSeconds = 3600;
+            else if (interval === 'D') intervalSeconds = 86400;
+
+            // Normalize ltt to epoch seconds
+            let currentEpochSec = Math.floor(Date.now() / 1000);
+            if (typeof ltt === 'number') {
+                // If ltt is in milliseconds, convert to seconds
+                currentEpochSec = ltt > 20000000000 ? Math.floor(ltt / 1000) : ltt;
+            } else if (typeof ltt === 'string') {
+                const parsed = new Date(ltt).getTime();
+                if (!isNaN(parsed)) currentEpochSec = Math.floor(parsed / 1000);
+            }
+
+            // Current tick boundary (aligned to interval)
+            const currentCandleTime = Math.floor(currentEpochSec / intervalSeconds) * intervalSeconds;
+
+            if (currentCandleTime > lastCandle.time) {
+                const newCandle: OHLCV = {
+                    time: currentCandleTime,
+                    open: ltp, high: ltp, low: ltp, close: ltp,
+                    volume: latestQuote.volume || 0
+                };
+                return [...prev, newCandle];
+            } else {
+                const updatedCandle = {
+                    ...lastCandle,
+                    close: ltp,
+                    high: Math.max(lastCandle.high, ltp),
+                    low: Math.min(lastCandle.low, ltp),
+                    volume: lastCandle.volume
+                };
+                const newArr = [...prev];
+                newArr[newArr.length - 1] = updatedCandle;
+                return newArr;
+            }
+        });
+    }, [latestQuote, symbol, interval]);
+
+    // Calculate livePrice for the LTP line from store directly
+    const [livePrice, setLivePrice] = useState<number | undefined>(undefined);
+
+    useEffect(() => {
+        if (!latestQuote || !symbol) return;
+        const config = getSymbolConfig(symbol);
+        if (config && latestQuote.securityId.toString() === config.id && latestQuote.ltp !== undefined) {
+            setLivePrice(latestQuote.ltp);
+        }
+    }, [latestQuote, symbol]);
+
+    const currentLivePrice = livePrice;
 
     const selectedDrawing = drawings.find(d => d.id === selectedId);
 
@@ -99,7 +220,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
     const getTimeAtIndex = (idx: number) => {
         const step = getIntervalStep();
-        const base = data[0].time;
+        const base = (candles && candles.length > 0) ? candles[0].time : 0;
         return base + (idx * step);
     };
 
@@ -135,7 +256,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
     // Main Chart Rendering Effect
     // Removed activeTool and dragState from dependencies to prevent full re-renders on interaction
     useEffect(() => {
-        if (!svgRef.current || data.length === 0 || dimensions.width === 0) return;
+        if (!svgRef.current || candles.length === 0 || dimensions.width === 0) return;
 
         const { width, height } = dimensions;
         const margin = { top: 10, right: 65, bottom: 25, left: 10 };
@@ -143,22 +264,24 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         const chartHeight = height - margin.top - margin.bottom;
 
         const svg = d3.select(svgRef.current);
-        svg.selectAll(".main-g").remove();
+        let g = svg.select<SVGGElement>(".main-g");
+        if (g.empty()) {
+            g = svg.append("g").attr("class", "main-g");
+        }
+        g.attr("transform", `translate(${margin.left},${margin.top})`);
 
-        const g = svg.append("g").attr("class", "main-g").attr("transform", `translate(${margin.left},${margin.top})`);
-
-        const x = d3.scaleLinear().domain([0, data.length]).range([0, chartWidth]);
-        const priceMin = d3.min(data, (d) => d.low) || 0;
-        const priceMax = d3.max(data, (d) => d.high) || 0;
+        const x = d3.scaleLinear().domain([0, candles.length]).range([0, chartWidth]);
+        const priceMin = d3.min(candles, (d: OHLCV) => d.low) || 0;
+        const priceMax = d3.max(candles, (d: OHLCV) => d.high) || 0;
         const pricePadding = (priceMax - priceMin) * 0.12;
         const y = d3.scaleLinear().domain([priceMin - pricePadding, priceMax + pricePadding]).range([chartHeight, 0]);
 
         setCurrentXScale(() => x);
         setYScale(() => y);
 
-        const mainChartArea = g.append("g").attr("clip-path", "url(#chart-clip)");
+        const mainChartArea = g.selectAll<SVGGElement, any>(".main-chart-area").data([null]).join("g").attr("class", "main-chart-area").attr("clip-path", "url(#chart-clip)");
 
-        const gridGroup = mainChartArea.append("g").attr("class", "grid-lines");
+        const gridGroup = mainChartArea.selectAll<SVGGElement, any>(".grid-lines").data([null]).join("g").attr("class", "grid-lines");
         const updateGrid = (sx: d3.ScaleLinear<number, number>, sy: d3.ScaleLinear<number, number>) => {
             gridGroup.selectAll("*").remove();
             if (!chartSettings.appearance.gridVisible) return;
@@ -176,9 +299,9 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         };
 
-        const candleGroup = mainChartArea.append("g").attr("class", "candles");
+        const candleGroup = mainChartArea.selectAll<SVGGElement, any>(".candles").data([null]).join("g").attr("class", "candles");
         const drawCandles = (sx: d3.ScaleLinear<number, number>, sy: d3.ScaleLinear<number, number>) => {
-            const candleSelection = candleGroup.selectAll<SVGGElement, any>(".candle").data(data, (d: any) => d.time.toString());
+            const candleSelection = candleGroup.selectAll<SVGGElement, OHLCV>(".candle").data(candles, (d: OHLCV) => d.time.toString());
             const enter = candleSelection.enter().append("g").attr("class", "candle");
             enter.append("line").attr("class", "wick").attr("stroke-width", 1);
             enter.append("rect").attr("class", "body").attr("stroke-width", 1).attr("rx", 0.5);
@@ -188,13 +311,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 const xPos = sx(i);
                 return (xPos >= -bandwidth && xPos <= chartWidth + bandwidth) ? null : "none";
             });
-            update.select(".wick").attr("y1", d => sy(d.high)).attr("y2", d => sy(d.low)).attr("x1", bandwidth / 2).attr("x2", bandwidth / 2).attr("stroke", d => (d.close >= d.open ? chartSettings.symbol.wickUpColor : chartSettings.symbol.wickDownColor));
-            update.select(".body").attr("y", d => sy(Math.max(d.open, d.close))).attr("height", d => Math.abs(sy(d.open) - sy(d.close)) || 0.5).attr("width", bandwidth).attr("fill", d => (d.close >= d.open ? chartSettings.symbol.upColor : chartSettings.symbol.downColor)).attr("stroke", d => (d.close >= d.open ? chartSettings.symbol.borderUpColor : chartSettings.symbol.borderDownColor));
+            update.select(".wick").attr("y1", d => sy((d as OHLCV).high)).attr("y2", d => sy((d as OHLCV).low)).attr("x1", bandwidth / 2).attr("x2", bandwidth / 2)
+                .attr("stroke", d => ((d as OHLCV).close >= (d as OHLCV).open ? chartSettings.symbol.wickUpColor : chartSettings.symbol.wickDownColor));
+            update.select(".body").attr("y", d => sy(Math.max((d as OHLCV).open, (d as OHLCV).close))).attr("height", d => Math.abs(sy((d as OHLCV).open) - sy((d as OHLCV).close)) || 0.5).attr("width", bandwidth)
+                .attr("fill", d => ((d as OHLCV).close >= (d as OHLCV).open ? chartSettings.symbol.upColor : chartSettings.symbol.downColor))
+                .attr("stroke", d => ((d as OHLCV).close >= (d as OHLCV).open ? chartSettings.symbol.borderUpColor : chartSettings.symbol.borderDownColor));
             candleSelection.exit().remove();
         };
 
-        const yAxisGroup = g.append("g").attr("transform", `translate(${chartWidth}, 0)`);
-        const xAxisGroup = g.append("g").attr("transform", `translate(0, ${chartHeight})`);
+        const yAxisGroup = g.selectAll<SVGGElement, any>(".y-axis").data([null]).join("g").attr("class", "y-axis").attr("transform", `translate(${chartWidth}, 0)`);
+        const xAxisGroup = g.selectAll<SVGGElement, any>(".x-axis").data([null]).join("g").attr("class", "x-axis").attr("transform", `translate(0, ${chartHeight})`);
 
         const updateAxes = (sx: d3.ScaleLinear<number, number>, sy: d3.ScaleLinear<number, number>) => {
             yAxisGroup.call(d3.axisRight(sy).tickSize(0).tickPadding(10) as any).select(".domain").remove();
@@ -225,17 +351,16 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 return !event.ctrlKey && !event.button;
             })
             .on("zoom", (e) => {
-                if (activeToolRef.current !== 'cursor' || dragStateRef.current) return; // Disable zoom while dragging
+                if (activeToolRef.current !== 'cursor' || dragStateRef.current) return;
 
-                transformRef.current = e.transform; // Save transform
+                transformRef.current = e.transform;
 
                 currentScaleX = e.transform.rescaleX(x);
                 setCurrentXScale(() => currentScaleX);
 
-                currentScaleY = y;
                 if (isAutoPricedRef.current) {
                     const [s, ed] = currentScaleX.domain();
-                    const visible = data.filter((_, i) => i >= s && i <= ed);
+                    const visible = candles.filter((_, i) => i >= s && i <= ed);
                     if (visible.length > 0) {
                         const minP = d3.min(visible, d => d.low)!;
                         const maxP = d3.max(visible, d => d.high)!;
@@ -250,6 +375,57 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 updateGrid(currentScaleX, currentScaleY);
             });
 
+        // Price Axis Zoom/Drag Logic
+        let yDragStartDomain: [number, number] | null = null;
+        const yAxisZoom = d3.drag<SVGGElement, unknown>()
+            .on("start", () => {
+                isAutoPricedRef.current = false; // Disable auto-scale when manually zooming price
+                yDragStartDomain = currentScaleY.domain() as [number, number];
+            })
+            .on("drag", (e) => {
+                if (!yDragStartDomain) return;
+                // Calculate scale factor based on drag distance
+                const factor = Math.exp(-e.dy * 0.01);
+                const cy = currentScaleY.invert(chartHeight / 2);
+                const dMin = cy - (cy - yDragStartDomain[0]) * factor;
+                const dMax = cy + (yDragStartDomain[1] - cy) * factor;
+
+                yDragStartDomain = [dMin, dMax];
+                currentScaleY.domain(yDragStartDomain);
+                setYScale(() => currentScaleY);
+
+                drawCandles(currentScaleX, currentScaleY);
+                updateAxes(currentScaleX, currentScaleY);
+                updateGrid(currentScaleX, currentScaleY);
+            });
+
+        yAxisGroup
+            .style("cursor", "ns-resize")
+            .call(yAxisZoom as any)
+            .on("dblclick", () => {
+                // Double click to reset auto pricing
+                isAutoPricedRef.current = true;
+                const [s, ed] = currentScaleX.domain();
+                const visible = candles.filter((_, i) => i >= s && i <= ed);
+                if (visible.length > 0) {
+                    const minP = d3.min(visible, d => d.low)!;
+                    const maxP = d3.max(visible, d => d.high)!;
+                    const pad = (maxP - minP) * 0.15;
+                    currentScaleY.domain([minP - pad, maxP + pad]);
+                    setYScale(() => currentScaleY);
+
+                    drawCandles(currentScaleX, currentScaleY);
+                    updateAxes(currentScaleX, currentScaleY);
+                    updateGrid(currentScaleX, currentScaleY);
+                }
+            });
+
+        // SVG transparent rect over Y-axis to catch events perfectly
+        yAxisGroup.selectAll("rect.y-catch").data([null]).join("rect")
+            .attr("class", "y-catch").attr("x", 0).attr("y", 0)
+            .attr("width", margin.right).attr("height", chartHeight)
+            .attr("fill", "transparent");
+
         svg.call(zoom as any);
 
         // Restore previous zoom state
@@ -262,9 +438,46 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             updateGrid(x, y);
         }
 
-        const crosshair = g.append("g").style("display", "none").style("pointer-events", "none");
-        const xL = crosshair.append("line").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
-        const yL = crosshair.append("line").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
+        // Draw LTP Line (Re-added definition)
+        // Draw LTP Line (Persistent and smooth)
+        const ltpGroup = g.selectAll<SVGGElement, any>(".ltp-group").data(currentLivePrice !== undefined ? [currentLivePrice] : []).join("g").attr("class", "ltp-group");
+
+        ltpGroup.each(function (price) {
+            const group = d3.select(this);
+            const yPos = currentScaleY(price);
+            const isUp = price >= (candles[candles.length - 1]?.close || 0);
+            const color = isUp ? "#10b981" : "#ef4444";
+
+            if (yPos >= 0 && yPos <= chartHeight) {
+                // Line
+                group.selectAll("line.ltp-line").data([price]).join("line").attr("class", "ltp-line")
+                    .attr("x1", 0).attr("x2", chartWidth).attr("y1", yPos).attr("y2", yPos)
+                    .attr("stroke", color).attr("stroke-width", 1).attr("stroke-dasharray", "4,4");
+
+                // Label Background
+                yAxisGroup.selectAll("rect.ltp-label-bg").data([price]).join("rect").attr("class", "ltp-label-bg")
+                    .attr("x", 0).attr("y", yPos - 10).attr("width", 50).attr("height", 20)
+                    .attr("fill", color).attr("rx", 2);
+
+                // Label Text
+                yAxisGroup.selectAll("text.ltp-label-text").data([price]).join("text").attr("class", "ltp-label-text")
+                    .attr("x", 25).attr("y", yPos + 4).attr("fill", "white").attr("font-size", "11px")
+                    .attr("text-anchor", "middle").text(price.toFixed(2));
+            } else {
+                group.selectAll("*").remove();
+                yAxisGroup.selectAll(".ltp-label-bg, .ltp-label-text").remove();
+            }
+        });
+
+        // Cleanup if no price
+        if (currentLivePrice === undefined) {
+            g.selectAll(".ltp-group").remove();
+            yAxisGroup.selectAll(".ltp-label-bg, .ltp-label-text").remove();
+        }
+
+        const crosshair = g.selectAll<SVGGElement, any>(".crosshair-container").data([null]).join("g").attr("class", "crosshair-container").style("display", "none").style("pointer-events", "none");
+        const xL = crosshair.selectAll("line.x-cross").data([null]).join("line").attr("class", "x-cross").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
+        const yL = crosshair.selectAll("line.y-cross").data([null]).join("line").attr("class", "y-cross").attr("stroke", colors.crosshair).attr("stroke-dasharray", "4,4");
 
         svg.on("mousemove", (e) => {
             const [mx, my] = d3.pointer(e);
@@ -279,7 +492,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
 
                 // Get inverted coordinates
                 const idx = Math.round(currentScaleX.invert(chartMx));
-                const time = getTimeAtIndex(Math.max(0, Math.min(idx, data.length - 1))).toString();
+                const time = getTimeAtIndex(Math.max(0, Math.min(idx, candles.length - 1))).toString();
                 const price = currentScaleY.invert(chartMy);
 
                 setDrawings(prev => prev.map(d => {
@@ -300,12 +513,13 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                         const priceDelta = price - startPrice;
 
                         const step = getIntervalStep();
-                        const origT1Idx = (parseInt(currentDragState.originalDrawing.t1) - data[0].time) / step;
+                        const baseTime = candles[0]?.time || 0;
+                        const origT1Idx = (parseInt(currentDragState.originalDrawing.t1) - baseTime) / step;
                         const newT1 = getTimeAtIndex(origT1Idx + idxDelta).toString();
                         const newP1 = currentDragState.originalDrawing.p1 + priceDelta;
 
                         if (currentDragState.originalDrawing.t2 && currentDragState.originalDrawing.p2 !== undefined) {
-                            const origT2Idx = (parseInt(currentDragState.originalDrawing.t2) - data[0].time) / step;
+                            const origT2Idx = (parseInt(currentDragState.originalDrawing.t2) - baseTime) / step;
                             const newT2 = getTimeAtIndex(origT2Idx + idxDelta).toString();
                             const newP2 = currentDragState.originalDrawing.p2 + priceDelta;
 
@@ -331,7 +545,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                 xL.attr("x1", cx).attr("x2", cx).attr("y1", 0).attr("y2", chartHeight);
                 yL.attr("y1", cy).attr("y2", cy).attr("x1", 0).attr("x2", chartWidth);
                 const idx = Math.round(currentScaleX.invert(cx));
-                if (data[idx]) setHoveredCandle(data[idx]);
+                if (candles[idx]) setHoveredCandle(candles[idx]);
                 if (activeToolRef.current !== 'cursor' && drawingPoints.current) setPreviewPoint({ t: getTimeAtIndex(idx).toString(), p: currentScaleY.invert(cy) });
             } else {
                 crosshair.style("display", "none");
@@ -403,7 +617,7 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
             }
         });
 
-    }, [data, dimensions, drawings.length, theme, colors, chartSettings]); // Removed activeTool & dragState
+    }, [candles, dimensions, theme, colors, chartSettings, currentLivePrice]);
 
     const updateSelectedDrawing = (updates: Partial<Drawing>) => {
         if (!selectedId) return;
@@ -423,6 +637,12 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
         <ContextMenu.Root>
             <ContextMenu.Trigger className="w-full h-full">
                 <div ref={containerRef} className="w-full h-full relative group select-none" style={{ backgroundColor: colors.bg }}>
+                    {isLoading && (
+                        <div className="absolute inset-0 z-50 flex items-center justify-center bg-white/50 dark:bg-black/50 backdrop-blur-sm">
+                            <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                    )}
+
                     {/* Professional Background Watermark */}
                     {symbol && chartSettings.appearance.watermarkVisible && (
                         <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-0">
@@ -457,10 +677,10 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                             </div>
                             <div className="flex items-center gap-4 text-[11px] font-bold font-mono">
                                 <div className="flex items-center gap-1.5 border-r border-gray-200 dark:border-[#2a2e39] pr-3">
-                                    <span className="text-gray-400">O</span><span className="dark:text-[#d1d4dc]">{currentCandle.open.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">H</span><span className="dark:text-[#d1d4dc]">{currentCandle.high.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">L</span><span className="dark:text-[#d1d4dc]">{currentCandle.low.toFixed(2)}</span>
-                                    <span className="text-gray-400 ml-2">C</span><span className={currentCandle.close >= currentCandle.open ? 'text-emerald-500' : 'text-rose-500'}>{currentCandle.close.toFixed(2)}</span>
+                                    <span className="text-gray-400">O</span><span className="dark:text-[#d1d4dc]">{currentCandle?.open?.toFixed(2) || '-'}</span>
+                                    <span className="text-gray-400 ml-2">H</span><span className="dark:text-[#d1d4dc]">{currentCandle?.high?.toFixed(2) || '-'}</span>
+                                    <span className="text-gray-400 ml-2">L</span><span className="dark:text-[#d1d4dc]">{currentCandle?.low?.toFixed(2) || '-'}</span>
+                                    <span className="text-gray-400 ml-2">C</span><span className={currentCandle && currentCandle.close >= currentCandle.open ? 'text-emerald-500' : 'text-rose-500'}>{currentCandle?.close?.toFixed(2) || '-'}</span>
                                 </div>
                             </div>
                         </div>
@@ -613,6 +833,22 @@ const TradingChart: React.FC<TradingChartProps> = ({ data, activeTool, symbol = 
                     </Dialog.Root>
 
                     <ChartSettingsModal open={isChartSettingsOpen} onOpenChange={setIsChartSettingsOpen} settings={chartSettings} onUpdate={setChartSettings} />
+
+                    {/* Loading Overlay */}
+                    {isLoading && (
+                        <div className="absolute inset-0 bg-background/50 backdrop-blur-[2px] z-50 flex items-center justify-center">
+                            <div className="flex flex-col items-center gap-4">
+                                <div className="relative">
+                                    <div className="w-12 h-12 border-4 border-primary/20 rounded-full animate-spin border-t-primary" />
+                                    <Activity size={24} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary animate-pulse" />
+                                </div>
+                                <div className="flex flex-col items-center">
+                                    <span className="text-[12px] font-black uppercase tracking-[0.2em] text-primary">Synchronizing</span>
+                                    <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-60">Dhan Live Market Feed</span>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </ContextMenu.Trigger>
             <ContextMenu.Portal>

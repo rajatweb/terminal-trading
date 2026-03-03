@@ -1,80 +1,98 @@
+
 "use client";
 
-import React, { useState } from "react";
-import ZenithTerminal, { WatchlistItem } from "@/components/Chart/ZenithTerminal";
-import { Position, OptionStrike } from "@/types/terminal";
-import { generateMockData } from "@/utils/mockData";
+import React from 'react';
+import { NewsWire } from '@/components/News/NewsWire';
+import { SocialFeed } from '@/components/News/SocialFeed';
+import { MarketSentiment } from '@/components/News/MarketSentiment';
+import { ChevronLeft, LayoutGrid, Maximize2, Settings2, Share2, Search } from 'lucide-react';
+import Link from 'next/link';
+import { NewsDetailModal } from '@/components/News/NewsDetailModal';
+import { NewsItem } from '@/utils/news/feeds';
 
-/**
- * Static dummy data for the terminal.
- * In a real application, this would be fetched from an API.
- */
-const STATIC_WATCHLIST: WatchlistItem[] = [
-  { symbol: "NIFTY 50", price: "22,123.40", change: "+0.85%", isUp: true, exchange: "NSE" },
-  { symbol: "BANK NIFTY", price: "46,500.20", change: "-0.20%", isUp: false, exchange: "NSE" },
-  { symbol: "RELIANCE", price: "2,540.20", change: "+1.24%", isUp: true, exchange: "NSE" },
-  { symbol: "TCS", price: "3,421.05", change: "-0.42%", isUp: false, exchange: "NSE" },
-  { symbol: "HDFC BANK", price: "1,650.00", change: "+0.81%", isUp: true, exchange: "NSE" },
-  { symbol: "INFOSYS", price: "1,420.30", change: "+2.10%", isUp: true, exchange: "NSE" },
-  { symbol: "ICICI BANK", price: "910.45", change: "-0.23%", isUp: false, exchange: "NSE" },
-];
+export default function NewsPage() {
+    const [selectedNews, setSelectedNews] = React.useState<NewsItem | null>(null);
 
-const STATIC_POSITIONS: Position[] = [
-  { symbol: "NIFTY 50", qty: 50, entryPrice: 22100.50, currentPrice: 22123.40, pnl: 1145.00, pnlPercent: 0.10, type: 'BUY', status: 'ACTIVE' },
-  { symbol: "RELIANCE", qty: 100, entryPrice: 2520.00, currentPrice: 2540.20, pnl: 2020.00, pnlPercent: 0.80, type: 'BUY', status: 'ACTIVE' },
-  { symbol: "TCS", qty: 25, entryPrice: 3450.00, currentPrice: 3421.05, pnl: -723.75, pnlPercent: -0.84, type: 'BUY', status: 'ACTIVE' },
-];
+    return (
+        <div className="flex flex-col h-screen bg-background text-foreground overflow-hidden font-sans select-none">
+            {/* News Header */}
+            <header className="h-12 border-b border-border flex items-center justify-between bg-card z-40 px-3 shrink-0">
+                <div className="flex items-center h-full divide-x divide-border">
+                    <Link href="/terminal" className="flex items-center gap-2 pr-3 pl-1 group cursor-pointer h-full hover:bg-muted transition-colors">
+                        <ChevronLeft size={18} className="text-muted-foreground group-hover:text-primary transition-all" />
+                        <div className="flex flex-col leading-none">
+                            <span className="font-bold text-[13px] tracking-tight uppercase">Trading</span>
+                            <span className="text-[9px] font-medium text-muted-foreground uppercase">Go to Terminal</span>
+                        </div>
+                    </Link>
 
-const STATIC_OPTION_CHAIN: OptionStrike[] = Array.from({ length: 21 }, (_, i) => {
-  const strike = 22000 + (i * 50);
-  return {
-    strike,
-    ce: { ltp: 240 - i * 10, change: 12.5, oi: 25.4, volume: 5.2, iv: 12.4 },
-    pe: { ltp: 50 + i * 8, change: -8.2, oi: 18.9, volume: 3.1, iv: 14.8 }
-  };
-});
+                    <div className="flex items-center gap-4 px-4 h-full">
+                        <div className="flex items-center gap-2 px-3 py-1 bg-primary/10 rounded-md border border-primary/20">
+                            <LayoutGrid size={14} className="text-primary" />
+                            <span className="text-[11px] font-black uppercase tracking-widest text-primary">Intelligence Hub</span>
+                        </div>
+                    </div>
+                </div>
 
-export default function Home() {
-  // We now use a static set of data without real-time ticker updates
-  const [data, setData] = useState(() => generateMockData(300, "5m"));
-  const [symbol, setSymbol] = useState("NIFTY");
-  const [interval, setIntervalVal] = useState("5m");
-  const [isLoading, setIsLoading] = useState(false);
+                <div className="flex items-center gap-3 h-full">
+                    <div className="relative group">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                            placeholder="SEARCH SIGNALS..."
+                            className="bg-muted/50 border border-border rounded-lg pl-9 pr-4 py-1.5 text-[11px] font-bold outline-none focus:ring-1 focus:ring-primary w-64 transition-all"
+                        />
+                    </div>
+                    <div className="flex items-center gap-1 border-l border-border pl-3">
+                        <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-all">
+                            <Share2 size={16} />
+                        </button>
+                        <button className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-all">
+                            <Settings2 size={16} />
+                        </button>
+                    </div>
+                </div>
+            </header>
 
-  const handleSymbolChange = React.useCallback((newSymbol: string) => {
-    setIsLoading(true);
-    setSymbol(newSymbol);
+            {/* Viewport */}
+            <div className="flex flex-1 overflow-hidden">
+                {/* Left: News Wire (25%) */}
+                <div className="w-[400px] shrink-0">
+                    <NewsWire onSelect={setSelectedNews} />
+                </div>
 
-    // Simulate a network request for static data of the new symbol
-    setTimeout(() => {
-      setData(generateMockData(300, interval));
-      setIsLoading(false);
-    }, 600);
-  }, [interval]);
+                {/* Center: Social Feed (45%) */}
+                <div className="flex-1 min-w-0">
+                    <SocialFeed onSelect={setSelectedNews} />
+                </div>
 
-  const handleIntervalChange = React.useCallback((newInterval: string) => {
-    setIsLoading(true);
-    setIntervalVal(newInterval);
+                {/* Right: Analytics & Sentiment (30%) */}
+                <div className="w-[360px] shrink-0 border-l border-border">
+                    <MarketSentiment />
+                </div>
+            </div>
 
-    // Simulate a network request for the new timeframe
-    setTimeout(() => {
-      setData(generateMockData(300, newInterval));
-      setIsLoading(false);
-    }, 400);
-  }, []);
+            <NewsDetailModal
+                item={selectedNews}
+                onClose={() => setSelectedNews(null)}
+            />
 
-  return (
-    <ZenithTerminal
-      data={data}
-      symbol={symbol}
-      watchlist={STATIC_WATCHLIST}
-      positions={STATIC_POSITIONS}
-      optionChain={STATIC_OPTION_CHAIN}
-      activeInterval={interval}
-      onSymbolChange={handleSymbolChange}
-      onIntervalChange={handleIntervalChange}
-      isLoading={isLoading}
-      headerTitle="Institutional Suite"
-    />
-  );
+            {/* Footer */}
+            <footer className="h-8 border-t border-border bg-card flex items-center px-3 justify-between text-[10px] font-bold text-muted-foreground z-40">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]" />
+                        <span className="uppercase tracking-widest">Global Intelligence Link: Secure</span>
+                    </div>
+                    <div className="flex items-center gap-1 border-l border-border pl-4">
+                        <Maximize2 size={12} />
+                        <span className="uppercase tracking-widest">Multi-Source Validation Active</span>
+                    </div>
+                </div>
+                <div className="flex items-center gap-5">
+                    <span className="text-primary font-black uppercase tracking-widest">Signal Strength: 98%</span>
+                    <span className="opacity-60 uppercase tracking-widest">{new Date().toLocaleDateString()} · {new Date().toLocaleTimeString()}</span>
+                </div>
+            </footer>
+        </div>
+    );
 }

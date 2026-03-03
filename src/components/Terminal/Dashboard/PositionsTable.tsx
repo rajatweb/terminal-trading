@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { useTerminalStore } from "@/stores/terminalStore";
+import { useTradingStore } from "@/stores/tradingStore";
 import {
     LayoutList,
     History,
@@ -69,7 +69,7 @@ const ConfirmationModal: React.FC<{
 };
 
 export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }) => {
-    const { positions, marginAvailable, marginUsed, closePosition, exitAllPositions } = useTerminalStore();
+    const { positions, orders, account, closePosition, exitAllPositions, cancelOrder } = useTradingStore();
     const [activeTab, setActiveTab] = useState('positions');
     const [searchQuery, setSearchQuery] = useState("");
     const [showSearch, setShowSearch] = useState(false);
@@ -77,28 +77,35 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
     // Modal State
     const [confirmState, setConfirmState] = useState<{
         isOpen: boolean;
-        type: 'CLOSE' | 'EXIT_ALL';
+        type: 'CLOSE' | 'EXIT_ALL' | 'CANCEL_ORDER';
         symbol?: string;
+        orderId?: string;
     }>({ isOpen: false, type: 'CLOSE' });
 
-    const handleCloseClick = (symbol: string) => {
-        setConfirmState({ isOpen: true, type: 'CLOSE', symbol });
+    const handleCloseClick = (securityId: string, symbol: string) => {
+        setConfirmState({ isOpen: true, type: 'CLOSE', symbol, orderId: securityId });
     };
 
     const handleExitAllClick = () => {
         setConfirmState({ isOpen: true, type: 'EXIT_ALL' });
     };
 
+    const handleCancelOrder = (orderId: string, symbol: string) => {
+        setConfirmState({ isOpen: true, type: 'CANCEL_ORDER', symbol, orderId });
+    };
+
     const handleConfirm = () => {
-        if (confirmState.type === 'CLOSE' && confirmState.symbol) {
-            closePosition(confirmState.symbol);
+        if (confirmState.type === 'CLOSE' && confirmState.orderId) {
+            closePosition(confirmState.orderId);
         } else if (confirmState.type === 'EXIT_ALL') {
             exitAllPositions();
+        } else if (confirmState.type === 'CANCEL_ORDER' && confirmState.orderId) {
+            cancelOrder(confirmState.orderId);
         }
         setConfirmState({ ...confirmState, isOpen: false });
     };
 
-    const totalPnL = positions.reduce((acc, curr) => acc + curr.pnl, 0);
+    const totalPnL = account.totalPnl;
     const isPnLUp = totalPnL >= 0;
 
     const filteredPositions = positions.filter(p =>
@@ -122,10 +129,10 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                 {/* Tabs Header */}
                 <div className="h-10 px-2 flex items-center justify-between border-b border-border bg-muted/20">
                     <div className="flex items-center gap-1 h-full">
-                        <Tab active={activeTab === 'positions'} onClick={() => setActiveTab('positions')} icon={<Target size={14} />} label="Positions" count={positions.length} />
-                        <Tab active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={<LayoutList size={14} />} label="Orders" />
+                        <Tab active={activeTab === 'positions'} onClick={() => setActiveTab('positions')} icon={<Target size={14} />} label="Positions" count={positions.filter(p => p.quantity !== 0).length} />
+                        <Tab active={activeTab === 'orders'} onClick={() => setActiveTab('orders')} icon={<LayoutList size={14} />} label="Orders" count={orders.filter(o => o.status === 'OPEN' || o.status === 'PENDING').length} />
                         <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<History size={14} />} label="Trade Log" />
-                        <Tab active={activeTab === 'funds'} onClick={() => setActiveTab('funds')} icon={<Wallet size={14} />} label="Holdings" />
+                        <Tab active={activeTab === 'funds'} onClick={() => setActiveTab('funds')} icon={<Wallet size={14} />} label="Portfolio" />
                     </div>
 
                     <div className="flex items-center gap-4 pr-3">
@@ -194,38 +201,42 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                                 </thead>
                                 <tbody>
                                     {filteredPositions.map((pos, idx) => (
-                                        <tr key={`${pos.symbol}-${idx}`} className="border-b border-border/30 hover:bg-muted/30 group transition-all">
+                                        <tr key={`${pos.securityId}-${idx}`} className="border-b border-border/30 hover:bg-muted/30 group transition-all">
                                             <td className="px-4 py-3 text-center">
-                                                <span className={`px-2 py-1 rounded text-[10px] font-black tracking-tight ${pos.type === 'BUY' ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'
+                                                <span className={`px-2 py-1 rounded text-[10px] font-black tracking-tight ${pos.quantity >= 0 ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'
                                                     }`}>
-                                                    {pos.type}
+                                                    {pos.quantity >= 0 ? 'LONG' : 'SHORT'}
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3">
                                                 <div className="flex flex-col">
                                                     <span className="text-[13px] font-bold text-foreground group-hover:text-primary transition-colors cursor-pointer">{pos.symbol}</span>
-                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider opacity-60">NSE • EQUITY</span>
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider opacity-60">{pos.exchange} • {pos.productType}</span>
                                                 </div>
                                             </td>
-                                            <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums opacity-90">{pos.qty}</td>
-                                            <td className="px-4 py-3 text-right text-[12px] font-bold font-mono text-muted-foreground tabular-nums">{pos.entryPrice.toFixed(2)}</td>
-                                            <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums opacity-90">{pos.currentPrice.toFixed(2)}</td>
-                                            <td className={`px-4 py-3 text-right text-[13px] font-black font-mono tabular-nums ${pos.pnl >= 0 ? 'text-up' : 'text-down'}`}>
-                                                {pos.pnl >= 0 ? "+" : ""}{pos.pnl.toFixed(2)}
+                                            <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums opacity-90">{pos.quantity}</td>
+                                            <td className="px-4 py-3 text-right text-[12px] font-bold font-mono text-muted-foreground tabular-nums">
+                                                {(pos.quantity > 0 ? pos.avgBuyPrice : pos.avgSellPrice).toFixed(2)}
                                             </td>
-                                            <td className={`px-4 py-3 text-right text-[11px] font-bold font-mono tabular-nums ${pos.pnlPercent >= 0 ? 'text-up' : 'text-down'}`}>
-                                                <span className={`px-1.5 py-0.5 rounded ${pos.pnlPercent >= 0 ? 'bg-up/10' : 'bg-down/10'}`}>
-                                                    {pos.pnlPercent.toFixed(2)}%
+                                            <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums opacity-90">{pos.ltp.toFixed(2)}</td>
+                                            <td className={`px-4 py-3 text-right text-[13px] font-black font-mono tabular-nums ${pos.totalPnl >= 0 ? 'text-up' : 'text-down'}`}>
+                                                {pos.totalPnl >= 0 ? "+" : ""}{pos.totalPnl.toFixed(2)}
+                                            </td>
+                                            <td className={`px-4 py-3 text-right text-[11px] font-bold font-mono tabular-nums ${pos.totalPnl >= 0 ? 'text-up' : 'text-down'}`}>
+                                                <span className={`px-1.5 py-0.5 rounded ${pos.totalPnl >= 0 ? 'bg-up/10' : 'bg-down/10'}`}>
+                                                    {pos.totalPnl !== 0 && pos.avgBuyPrice > 0 ? ((pos.totalPnl / (Math.abs(pos.quantity) * (pos.quantity > 0 ? pos.avgBuyPrice : pos.avgSellPrice))) * 100).toFixed(2) : "0.00"}%
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-center">
                                                 <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity translate-y-2 group-hover:translate-y-0 duration-200">
-                                                    <button
-                                                        onClick={() => handleCloseClick(pos.symbol)}
-                                                        className="px-3 py-1.5 bg-background border border-border hover:bg-destructive hover:border-destructive hover:text-white rounded text-[10px] font-black transition-all shadow-sm uppercase tracking-tight"
-                                                    >
-                                                        Close
-                                                    </button>
+                                                    {pos.quantity !== 0 && (
+                                                        <button
+                                                            onClick={() => handleCloseClick(pos.securityId, pos.symbol)}
+                                                            className="px-3 py-1.5 bg-background border border-border hover:bg-destructive hover:border-destructive hover:text-white rounded text-[10px] font-black transition-all shadow-sm uppercase tracking-tight"
+                                                        >
+                                                            Close
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>
@@ -243,13 +254,79 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                                 </div>
                             </div>
                         )
+                    ) : activeTab === 'orders' ? (
+                        orders.length > 0 ? (
+                            <table className="w-full border-collapse">
+                                <thead>
+                                    <tr className="sticky top-0 bg-card border-b border-border z-10 shadow-sm text-[10px] font-black text-muted-foreground uppercase tracking-wider">
+                                        <th className="px-4 py-3 text-center w-16">Side</th>
+                                        <th className="px-4 py-3 text-left">Instrument</th>
+                                        <th className="px-4 py-3 text-right">Qty.</th>
+                                        <th className="px-4 py-3 text-right">Price</th>
+                                        <th className="px-4 py-3 text-center">Status</th>
+                                        <th className="px-4 py-3 text-right">Time</th>
+                                        <th className="px-4 py-3 text-center w-24">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {orders.map((order, idx) => (
+                                        <tr key={order.orderId} className="border-b border-border/30 hover:bg-muted/30 group transition-all">
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`px-2 py-1 rounded text-[10px] font-black tracking-tight ${order.side === 'BUY' ? 'bg-blue-500/10 text-blue-500' : 'bg-rose-500/10 text-rose-500'}`}>
+                                                    {order.side}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[13px] font-bold text-foreground">{order.symbol}</span>
+                                                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-wider opacity-60">{order.orderType} • {order.productType}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-[12px] font-black font-mono text-foreground tabular-nums opacity-90">{order.quantity}</td>
+                                            <td className="px-4 py-3 text-right text-[12px] font-bold font-mono text-muted-foreground tabular-nums">{order.price.toFixed(2)}</td>
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-tighter ${order.status === 'EXECUTED' ? 'bg-up/10 text-up' :
+                                                    order.status === 'REJECTED' || order.status === 'CANCELLED' ? 'bg-down/10 text-down' :
+                                                        'bg-primary/10 text-primary animate-pulse'
+                                                    }`}>
+                                                    {order.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right text-[10px] font-medium text-muted-foreground tabular-nums">
+                                                {new Date(order.timestamp).toLocaleTimeString()}
+                                            </td>
+                                            <td className="px-4 py-3 text-center">
+                                                {(order.status === 'OPEN' || order.status === 'PENDING') && (
+                                                    <button
+                                                        onClick={() => handleCancelOrder(order.orderId, order.symbol)}
+                                                        className="px-3 py-1 bg-rose-600/10 hover:bg-rose-600 text-rose-600 hover:text-white rounded text-[9px] font-black transition-all"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center opacity-40 gap-3">
+                                <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
+                                    <LayoutList size={32} className="text-muted-foreground" />
+                                </div>
+                                <div className="text-center">
+                                    <h3 className="text-[14px] font-black text-foreground uppercase tracking-widest">No Active Orders</h3>
+                                    <p className="text-[11px] text-muted-foreground font-medium mt-1">Submit an order to see it here.</p>
+                                </div>
+                            </div>
+                        )
                     ) : (
                         <div className="h-full flex flex-col items-center justify-center opacity-40 gap-3">
                             <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center">
                                 <Wallet size={32} className="text-muted-foreground" />
                             </div>
                             <div className="text-center">
-                                <h3 className="text-[14px] font-black text-foreground uppercase tracking-widest">{activeTab.replace('history', 'Trade Log').toUpperCase()} Empty</h3>
+                                <h3 className="text-[14px] font-black text-foreground uppercase tracking-widest">{activeTab.replace('history', 'Trade Log').replace('funds', 'Portfolio').toUpperCase()} Empty</h3>
                                 <p className="text-[11px] text-muted-foreground font-medium mt-1">No data available for this section yet.</p>
                             </div>
                         </div>
@@ -260,12 +337,12 @@ export const PositionsPanel: React.FC<{ onToggle?: () => void }> = ({ onToggle }
                 <div className="h-8 px-4 border-t border-border flex items-center gap-6 text-[10px] font-black text-muted-foreground uppercase tracking-widest bg-muted/20">
                     <span className="flex items-center gap-2">
                         <Wallet size={12} className="text-primary" />
-                        Margin Available: <span className="text-foreground tabular-nums text-[11px] font-bold">₹{marginAvailable.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        Margin Available: <span className="text-foreground tabular-nums text-[11px] font-bold">₹{account.availableMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </span>
                     <span className="w-px h-4 bg-border/50" />
                     <span className="flex items-center gap-2">
                         <Target size={12} className="text-destructive" />
-                        Margin Used: <span className="text-destructive tabular-nums text-[11px] font-bold">₹{marginUsed.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+                        Margin Used: <span className="text-destructive tabular-nums text-[11px] font-bold">₹{account.usedMargin.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
                     </span>
                     <div className="flex-1" />
                     <span className="flex items-center gap-1.5 text-primary cursor-pointer hover:underline underline-offset-4 decoration-2 transition-all hover:text-primary/80">
